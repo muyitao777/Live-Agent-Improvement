@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Agent Experience — Service Blueprint</title>
+<style>
+  :root{
+    --ink:#191c24; --ink-2:#50555f; --ink-3:#8b909b; --ink-4:#b6bac2;
+    --bg:#fafafa; --card:#ffffff; --line:#ececee; --line-2:#e0e1e4;
+    --employee:#4356d6; --agent:#0e7a6a; --org:#a06b00;
+    --mw:#7b3ff2; --shared:#b8860b; --snow:#1a7f37;
+    --fail:#c0362c; --fail-bg:#fbf3f2;
+    --edge:#9a6700; --happy:#1a7f37;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;font-size:20px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1760px;margin:0 auto;padding:52px 32px 104px}
+
+  header.page{margin-bottom:44px}
+  .kicker{font-size:15px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--ink-3);margin-bottom:12px}
+  header.page h1{font-size:44px;font-weight:700;letter-spacing:-.5px}
+  header.page p.sub{color:var(--ink-2);margin-top:16px;max-width:1040px;font-size:21px}
+  nav.toc{display:flex;gap:34px;margin-top:28px;padding-top:24px;border-top:1px solid var(--line-2);flex-wrap:wrap}
+  nav.toc a{font-size:19px;font-weight:600;color:var(--ink-3);text-decoration:none;padding-bottom:10px;border-bottom:2.5px solid transparent;cursor:pointer}
+  nav.toc a:hover{color:var(--ink)}
+  nav.toc a.active{color:var(--ink);border-bottom-color:var(--ink)}
+  nav.toc a span{color:var(--ink-4);margin-right:6px}
+  .page-view{display:none}
+  .page-view.active{display:block}
+  .subnav{display:flex;gap:24px;margin-bottom:22px;flex-wrap:wrap}
+  .subnav a{font-size:16px;font-weight:600;color:var(--ink-3);text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+  .subnav a:hover{color:var(--ink)}
+  .subnav .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  h2.section{font-size:31px;font-weight:700;letter-spacing:-.3px;margin:68px 0 14px}
+  p.section-sub{color:var(--ink-2);margin-bottom:26px;max-width:1040px;font-size:19.5px}
+
+  .legend{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:20px;font-size:16.5px;color:var(--ink-2)}
+  .legend .sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+
+  /* ---------- Blueprint ---------- */
+  .bp-scroll{overflow-x:auto;border:1px solid var(--line-2);border-radius:10px;background:var(--card)}
+  table.bp{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
+  table.bp th,table.bp td{vertical-align:top;text-align:left;padding:20px 22px;min-width:330px;max-width:330px;font-size:18.5px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  table.bp th:last-child,table.bp td:last-child{border-right:none}
+
+  table.bp thead th{position:sticky;top:0;background:var(--card);z-index:3;border-bottom:1px solid var(--ink);padding-top:16px;padding-bottom:12px}
+  .stage-num{font-size:14.5px;font-weight:600;letter-spacing:1.2px;color:var(--ink-3)}
+  .stage-name{display:block;font-size:21.5px;font-weight:700;margin-top:3px;letter-spacing:-.1px}
+  .stage-theme{display:block;font-size:15.5px;color:var(--ink-3);margin-top:2px}
+
+  .lane-label{position:sticky;left:0;background:var(--card);z-index:2;min-width:250px;max-width:250px;border-right:1px solid var(--line-2) !important}
+  .lane-label .name{font-size:15.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-2)}
+  .lane-label .who{display:block;font-size:15.5px;color:var(--ink-3);margin-top:5px;text-transform:none;letter-spacing:0;font-weight:400;line-height:1.4}
+  .lane-label .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px}
+  thead .lane-label{z-index:4;border-bottom:1px solid var(--ink)}
+
+  td ul{list-style:none}
+  td ul li{margin-bottom:6px;color:var(--ink-2)}
+  td ul li:last-child{margin-bottom:0}
+  td ul li b{color:var(--ink);font-weight:600}
+
+  tr.divider td{padding:9px 22px;background:var(--bg);color:var(--ink-3);font-size:14px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;border-right:none;min-width:0;max-width:none;position:sticky;left:0}
+
+  tr.lane-fail td{background:var(--fail-bg)}
+  tr.lane-fail td.lane-label{background:var(--card)}
+  tr.lane-fail td ul li{color:#8c3a33}
+
+  .sys{display:flex;gap:8px;margin-bottom:7px;align-items:baseline}
+  .sys:last-child{margin-bottom:0}
+  .sys .d{flex:none;width:7px;height:7px;border-radius:50%;position:relative;top:-1px}
+  .sys.mw .d{background:var(--mw)} .sys.sh .d{background:var(--shared)} .sys.sn .d{background:var(--snow)}
+  .sys span{color:var(--ink-2)}
+
+  /* ---------- Scenario catalog ---------- */
+  .persona-block{border:1px solid var(--line-2);border-radius:10px;background:var(--card);margin-bottom:28px;overflow:hidden}
+  .persona-head{padding:18px 24px 16px;border-bottom:1px solid var(--line-2)}
+  .persona-head h3{font-size:25px;font-weight:700;display:flex;align-items:center;gap:13px}
+  .persona-head h3 .dot{width:12px;height:12px;border-radius:50%}
+  .persona-head .goal{color:var(--ink-3);font-size:18.5px;margin-top:8px;max-width:1000px}
+  .theme-group{padding:24px 28px;border-bottom:1px solid var(--line)}
+  .theme-group:last-child{border-bottom:none}
+  .theme-group h4{font-size:16.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-2)}
+  .theme-group .outcome{font-size:18.5px;color:var(--ink-3);margin:6px 0 18px}
+  .scenario{display:grid;grid-template-columns:54px 112px 1fr;gap:20px;padding:12px 0;align-items:baseline;border-top:1px solid var(--line)}
+  .scenario:first-of-type{border-top:none}
+  .scenario .sid{font-size:17px;font-weight:600;color:var(--ink-4);font-variant-numeric:tabular-nums}
+  .tag{font-size:14.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase}
+  .tag.happy{color:var(--happy)} .tag.edge{color:var(--edge)} .tag.fail{color:var(--fail)}
+  .scenario p{font-size:19px;color:var(--ink-2)}
+  .scenario p b{color:var(--ink);font-weight:600}
+  .scenario p .src{color:var(--ink-4);font-size:16px;white-space:nowrap}
+
+  .footnote{margin-top:52px;color:var(--ink-3);font-size:16.5px;max-width:1040px;line-height:1.6}
+  @media print{.bp-scroll{overflow:visible}body{background:#fff}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <div class="kicker">Live Agent Improvement · P0 Themes</div>
+  <h1>Live Agent Experience — Service Blueprint</h1>
+  <p class="sub">The end-to-end journey across employee, agent, and organization, with platform ownership and known failure points. Synthesized from the UX Improvements Memo and the Research Memo (217 escalations and support issues).</p>
+</header>
+
+<div class="page-view active">
+<h2 class="section" id="blueprint" style="margin-top:12px">Service blueprint</h2>
+<p class="section-sub">Ten stages across the journey, five blueprint lanes. Scroll horizontally. The bottom lane maps observed failures from the research to the stage where they break the journey.</p>
+<div class="legend">
+  <span><span class="sw" style="background:var(--employee)"></span>Employee</span>
+  <span><span class="sw" style="background:var(--agent)"></span>Agent</span>
+  <span><span class="sw" style="background:var(--org)"></span>Organization</span>
+  <span><span class="sw" style="background:var(--mw)"></span>Moveworks</span>
+  <span><span class="sw" style="background:var(--shared)"></span>Shared boundary</span>
+  <span><span class="sw" style="background:var(--snow)"></span>ServiceNow AWA</span>
+  <span><span class="sw" style="background:var(--fail)"></span>Failure point</span>
+</div>
+
+<div class="bp-scroll">
+<table class="bp">
+<thead>
+<tr>
+  <th class="lane-label"><span class="name">Stage</span></th>
+  <th><span class="stage-num">01</span><span class="stage-name">Verify</span><span class="stage-theme">Identity</span></th>
+  <th><span class="stage-num">02</span><span class="stage-name">Choose</span><span class="stage-theme">Access &amp; initiation</span></th>
+  <th><span class="stage-num">03</span><span class="stage-name">Communicate</span><span class="stage-theme">Language detection</span></th>
+  <th><span class="stage-num">04</span><span class="stage-name">Prepare</span><span class="stage-theme">Context &amp; intake</span></th>
+  <th><span class="stage-num">05</span><span class="stage-name">Route</span><span class="stage-theme">Routing &amp; policy</span></th>
+  <th><span class="stage-num">06</span><span class="stage-name">Connect</span><span class="stage-theme">Session &amp; queue</span></th>
+  <th><span class="stage-num">07</span><span class="stage-name">Continue</span><span class="stage-theme">Live chat</span></th>
+  <th><span class="stage-num">08</span><span class="stage-name">Escalate</span><span class="stage-theme">Transfer</span></th>
+  <th><span class="stage-num">09</span><span class="stage-name">Recover</span><span class="stage-theme">Fallback</span></th>
+  <th><span class="stage-num">10</span><span class="stage-name">Resolve</span><span class="stage-theme">Close &amp; measure</span></th>
+</tr>
+</thead>
+<tbody>
+
+<tr class="lane-evidence">
+  <td class="lane-label"><span class="name">Touchpoints</span><span class="who">Physical evidence</span></td>
+  <td><ul><li>Assistant in Slack, Teams, or web</li><li>Account linking</li></ul></td>
+  <td><ul><li>Handoff card</li><li>Option descriptions</li></ul></td>
+  <td><ul><li>Language detection</li><li>Localized copy</li></ul></td>
+  <td><ul><li>Intake form · file upload</li><li>Context preview</li></ul></td>
+  <td><ul><li>Queue confirmation</li><li>Routing reason</li></ul></td>
+  <td><ul><li>Status indicator</li><li>Queue position &amp; wait</li></ul></td>
+  <td><ul><li>Live chat</li><li>Delivery &amp; translation status</li></ul></td>
+  <td><ul><li>Transfer notice</li><li>Destination confirmation</li></ul></td>
+  <td><ul><li>Ticket · callback · alternate queue</li></ul></td>
+  <td><ul><li>Resolution recap</li><li>Transcript · ticket reference</li></ul></td>
+</tr>
+
+<tr>
+  <td class="lane-label"><span class="dot" style="background:var(--employee)"></span><span class="name">Employee</span><span class="who">Camila — regional sales manager</span></td>
+  <td><ul><li>Opens assistant with work account</li></ul></td>
+  <td><ul><li>Describes the need</li><li>Compares support options</li></ul></td>
+  <td><ul><li>Continues in own language</li></ul></td>
+  <td><ul><li>Adds screenshot &amp; details</li><li>Reviews shared context</li></ul></td>
+  <td><ul><li>Confirms the handoff</li></ul></td>
+  <td><ul><li>Starts one session</li><li>Watches status</li></ul></td>
+  <td><ul><li>Chats with the agent</li><li>Sends attachments</li></ul></td>
+  <td><ul><li>Agrees to escalation</li></ul></td>
+  <td><ul><li>Chooses a fallback</li></ul></td>
+  <td><ul><li>Confirms resolution</li></ul></td>
+</tr>
+
+<tr class="divider"><td colspan="11">Line of interaction</td></tr>
+
+<tr>
+  <td class="lane-label"><span class="name">Frontstage</span><span class="who">Assistant + visible agent</span></td>
+  <td><ul><li>Confirms signed-in identity</li><li>Resolves auth issues first</li></ul></td>
+  <td><ul><li>Offers Live Agent only when eligible</li><li>Explains team, wait, data shared</li></ul></td>
+  <td><ul><li>Detects active language, not profile default</li><li>Signals translation; allows correction</li></ul></td>
+  <td><ul><li>Pre-fills known details</li><li>Asks only what’s missing; preview before sharing</li></ul></td>
+  <td><ul><li>Checks intent, profile, language, hours, capacity</li><li>Names team, reason &amp; wait</li></ul></td>
+  <td><ul><li>One active session</li><li>Verifying → queued → connecting → connected</li><li>Safe retry &amp; resume</li></ul></td>
+  <td><ul><li>Agent joins with context</li><li>Two-way translation</li><li>Delivery confirmed</li></ul></td>
+  <td><ul><li>Explains why; confirms destination</li><li>No repeated intake</li></ul></td>
+  <td><ul><li>Explains why route ended</li><li>Converts request to chosen fallback</li></ul></td>
+  <td><ul><li>Confirms before closing</li><li>Localized recap; reopen path</li></ul></td>
+</tr>
+
+<tr class="divider"><td colspan="11">Line of visibility</td></tr>
+
+<tr>
+  <td class="lane-label"><span class="dot" style="background:var(--agent)"></span><span class="name">Agent</span><span class="who">Backstage — agent workspace</span></td>
+  <td><ul><li>Sees verified identity &amp; warnings</li></ul></td>
+  <td><ul><li>Reviews intent &amp; label</li><li>Validates queue</li></ul></td>
+  <td><ul><li>Sees language badge, bilingual summary</li></ul></td>
+  <td><ul><li>Receives summary, history, files, links</li></ul></td>
+  <td><ul><li>Sets presence &amp; availability</li><li>Accepts or flags misroute</li></ul></td>
+  <td><ul><li>Verifies request &amp; identity</li><li>Accepts once</li></ul></td>
+  <td><ul><li>Responds, with or without translation</li><li>Sees delivery status</li></ul></td>
+  <td><ul><li>Transfers with context</li><li>Records resolution code</li></ul></td>
+  <td><ul><li>Request converted or closed with status</li></ul></td>
+  <td><ul><li>Closes with status, transcript, ticket</li></ul></td>
+</tr>
+
+<tr>
+  <td class="lane-label"><span class="dot" style="background:var(--org)"></span><span class="name">Organization</span><span class="who">Support processes</span></td>
+  <td><ul><li>Identity mapping rules</li></ul></td>
+  <td><ul><li>Eligibility &amp; intent rules</li><li>Copy &amp; intake builder</li></ul></td>
+  <td><ul><li>Supported languages &amp; detection rules</li></ul></td>
+  <td><ul><li>Context fields, consent, redaction, retention</li></ul></td>
+  <td><ul><li>Routing policies</li><li>Queue, capacity &amp; overflow mapping</li></ul></td>
+  <td><ul><li>Lifecycle, retry, duplicate &amp; timeout policies</li></ul></td>
+  <td><ul><li>Delivery logs &amp; alerts</li><li>File security</li></ul></td>
+  <td><ul><li>Escalation &amp; transfer policies</li></ul></td>
+  <td><ul><li>Fallback workflows</li></ul></td>
+  <td><ul><li>Analytics, audit log, quality gates</li></ul></td>
+</tr>
+
+<tr class="divider"><td colspan="11">Line of internal interaction</td></tr>
+
+<tr>
+  <td class="lane-label"><span class="name">Platform</span><span class="who">Moveworks · Shared · ServiceNow AWA</span></td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Auth &amp; identity link</span></div>
+    <div class="sys sh"><span class="d"></span><span>Common user identity</span></div>
+    <div class="sys sn"><span class="d"></span><span>Agent-side identity record</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Offer, copy, intake, fallbacks</span></div>
+    <div class="sys sh"><span class="d"></span><span>Eligibility &amp; state ownership</span></div>
+    <div class="sys sn"><span class="d"></span><span>Schedules, capacity, assignment</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Detection &amp; translation</span></div>
+    <div class="sys sh"><span class="d"></span><span>Language codes &amp; status</span></div>
+    <div class="sys sn"><span class="d"></span><span>Language skills &amp; queues</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Context sent before actionable</span></div>
+    <div class="sys sh"><span class="d"></span><span>Payload schema &amp; acks</span></div>
+    <div class="sys sn"><span class="d"></span><span>Field mappings &amp; retention</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Sends intent, language, priority</span></div>
+    <div class="sys sh"><span class="d"></span><span>Availability &amp; assignment signals</span></div>
+    <div class="sys sn"><span class="d"></span><span>AWA rules, queues, skills</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>SQS FIFO; de-duplicated retries</span></div>
+    <div class="sys sh"><span class="d"></span><span>Shared session &amp; message IDs</span></div>
+    <div class="sys sn"><span class="d"></span><span>Session states &amp; timestamps</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Message brokering</span></div>
+    <div class="sys sh"><span class="d"></span><span>Delivery acks &amp; sequence</span></div>
+    <div class="sys sn"><span class="d"></span><span>Agent workspace</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Context preserved on reroute</span></div>
+    <div class="sys sh"><span class="d"></span><span>Transfer events</span></div>
+    <div class="sys sn"><span class="d"></span><span>Internal transfers &amp; summaries</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Owns offer &amp; fallback</span></div>
+    <div class="sys sh"><span class="d"></span><span>Lifecycle events</span></div>
+    <div class="sys sn"><span class="d"></span><span>Timeout &amp; closure events</span></div>
+  </td>
+  <td>
+    <div class="sys mw"><span class="d"></span><span>Monitoring &amp; DLQ replay</span></div>
+    <div class="sys sh"><span class="d"></span><span>Outcome IDs</span></div>
+    <div class="sys sn"><span class="d"></span><span>Records &amp; transcripts</span></div>
+  </td>
+</tr>
+
+<tr class="lane-fail">
+  <td class="lane-label"><span class="dot" style="background:var(--fail)"></span><span class="name">Failure points</span><span class="who">From 217-ticket research</span></td>
+  <td><ul><li>Locked accounts block starts</li><li>“Guest Guest” identity</li></ul></td>
+  <td><ul><li>Offered for unsupported domains</li><li>Irrelevant intake questions</li></ul></td>
+  <td><ul><li>Profile default overrides active language</li><li>Untranslated strings</li></ul></td>
+  <td><ul><li>Repeated information</li><li>Failed citations &amp; files</li></ul></td>
+  <td><ul><li>Global availability masks empty queues</li><li>Wrong ITSM instance</li></ul></td>
+  <td><ul><li>Ghost &amp; duplicate sessions</li><li>Premature timeouts; conflicting status</li></ul></td>
+  <td><ul><li>Invisible attachments</li><li>Plain-text links; undelivered replies</li></ul></td>
+  <td><ul><li>Context lost on transfer</li></ul></td>
+  <td><ul><li>“No agent” message vanishes</li><li>Dead ends without alternatives</li></ul></td>
+  <td><ul><li>Sessions missing from analytics</li><li>Missing transcripts</li></ul></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+</div>
+
+
+<p class="footnote">Sources: Live Agents UX Improvements Memo (P0 use cases, persona journeys, platform ownership, Camila end-to-end experience) and Live Agents UX Improvements Research Memo (217 tickets — 98 product escalations, 119 support issues). Gray references point to the escalations and support issues cited in the research memo.</p>
+
+</div>
+</body>
+</html>

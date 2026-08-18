@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Agent Experience — Scenario Catalog</title>
+<style>
+  :root{
+    --ink:#191c24; --ink-2:#50555f; --ink-3:#8b909b; --ink-4:#b6bac2;
+    --bg:#fafafa; --card:#ffffff; --line:#ececee; --line-2:#e0e1e4;
+    --employee:#4356d6; --agent:#0e7a6a; --org:#a06b00;
+    --mw:#7b3ff2; --shared:#b8860b; --snow:#1a7f37;
+    --fail:#c0362c; --fail-bg:#fbf3f2;
+    --edge:#9a6700; --happy:#1a7f37;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;font-size:20px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1760px;margin:0 auto;padding:52px 32px 104px}
+
+  header.page{margin-bottom:44px}
+  .kicker{font-size:15px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--ink-3);margin-bottom:12px}
+  header.page h1{font-size:44px;font-weight:700;letter-spacing:-.5px}
+  header.page p.sub{color:var(--ink-2);margin-top:16px;max-width:1040px;font-size:21px}
+  nav.toc{display:flex;gap:34px;margin-top:28px;padding-top:24px;border-top:1px solid var(--line-2);flex-wrap:wrap}
+  nav.toc a{font-size:19px;font-weight:600;color:var(--ink-3);text-decoration:none;padding-bottom:10px;border-bottom:2.5px solid transparent;cursor:pointer}
+  nav.toc a:hover{color:var(--ink)}
+  nav.toc a.active{color:var(--ink);border-bottom-color:var(--ink)}
+  nav.toc a span{color:var(--ink-4);margin-right:6px}
+  .page-view{display:none}
+  .page-view.active{display:block}
+  .subnav{display:flex;gap:24px;margin-bottom:22px;flex-wrap:wrap}
+  .subnav a{font-size:16px;font-weight:600;color:var(--ink-3);text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+  .subnav a:hover{color:var(--ink)}
+  .subnav .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  h2.section{font-size:31px;font-weight:700;letter-spacing:-.3px;margin:68px 0 14px}
+  p.section-sub{color:var(--ink-2);margin-bottom:26px;max-width:1040px;font-size:19.5px}
+
+  .legend{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:20px;font-size:16.5px;color:var(--ink-2)}
+  .legend .sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+
+  /* ---------- Blueprint ---------- */
+  .bp-scroll{overflow-x:auto;border:1px solid var(--line-2);border-radius:10px;background:var(--card)}
+  table.bp{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
+  table.bp th,table.bp td{vertical-align:top;text-align:left;padding:20px 22px;min-width:330px;max-width:330px;font-size:18.5px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  table.bp th:last-child,table.bp td:last-child{border-right:none}
+
+  table.bp thead th{position:sticky;top:0;background:var(--card);z-index:3;border-bottom:1px solid var(--ink);padding-top:16px;padding-bottom:12px}
+  .stage-num{font-size:14.5px;font-weight:600;letter-spacing:1.2px;color:var(--ink-3)}
+  .stage-name{display:block;font-size:21.5px;font-weight:700;margin-top:3px;letter-spacing:-.1px}
+  .stage-theme{display:block;font-size:15.5px;color:var(--ink-3);margin-top:2px}
+
+  .lane-label{position:sticky;left:0;background:var(--card);z-index:2;min-width:250px;max-width:250px;border-right:1px solid var(--line-2) !important}
+  .lane-label .name{font-size:15.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-2)}
+  .lane-label .who{display:block;font-size:15.5px;color:var(--ink-3);margin-top:5px;text-transform:none;letter-spacing:0;font-weight:400;line-height:1.4}
+  .lane-label .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px}
+  thead .lane-label{z-index:4;border-bottom:1px solid var(--ink)}
+
+  td ul{list-style:none}
+  td ul li{margin-bottom:6px;color:var(--ink-2)}
+  td ul li:last-child{margin-bottom:0}
+  td ul li b{color:var(--ink);font-weight:600}
+
+  tr.divider td{padding:9px 22px;background:var(--bg);color:var(--ink-3);font-size:14px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;border-right:none;min-width:0;max-width:none;position:sticky;left:0}
+
+  tr.lane-fail td{background:var(--fail-bg)}
+  tr.lane-fail td.lane-label{background:var(--card)}
+  tr.lane-fail td ul li{color:#8c3a33}
+
+  .sys{display:flex;gap:8px;margin-bottom:7px;align-items:baseline}
+  .sys:last-child{margin-bottom:0}
+  .sys .d{flex:none;width:7px;height:7px;border-radius:50%;position:relative;top:-1px}
+  .sys.mw .d{background:var(--mw)} .sys.sh .d{background:var(--shared)} .sys.sn .d{background:var(--snow)}
+  .sys span{color:var(--ink-2)}
+
+  /* ---------- Scenario catalog ---------- */
+  .persona-block{border:1px solid var(--line-2);border-radius:10px;background:var(--card);margin-bottom:28px;overflow:hidden}
+  .persona-head{padding:18px 24px 16px;border-bottom:1px solid var(--line-2)}
+  .persona-head h3{font-size:25px;font-weight:700;display:flex;align-items:center;gap:13px}
+  .persona-head h3 .dot{width:12px;height:12px;border-radius:50%}
+  .persona-head .goal{color:var(--ink-3);font-size:18.5px;margin-top:8px;max-width:1000px}
+  .theme-group{padding:24px 28px;border-bottom:1px solid var(--line)}
+  .theme-group:last-child{border-bottom:none}
+  .theme-group h4{font-size:16.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-2)}
+  .theme-group .outcome{font-size:18.5px;color:var(--ink-3);margin:6px 0 18px}
+  .scenario{display:grid;grid-template-columns:54px 112px 1fr;gap:20px;padding:12px 0;align-items:baseline;border-top:1px solid var(--line)}
+  .scenario:first-of-type{border-top:none}
+  .scenario .sid{font-size:17px;font-weight:600;color:var(--ink-4);font-variant-numeric:tabular-nums}
+  .tag{font-size:14.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase}
+  .tag.happy{color:var(--happy)} .tag.edge{color:var(--edge)} .tag.fail{color:var(--fail)}
+  .scenario p{font-size:19px;color:var(--ink-2)}
+  .scenario p b{color:var(--ink);font-weight:600}
+  .scenario p .src{color:var(--ink-4);font-size:16px;white-space:nowrap}
+
+  .footnote{margin-top:52px;color:var(--ink-3);font-size:16.5px;max-width:1040px;line-height:1.6}
+  @media print{.bp-scroll{overflow:visible}body{background:#fff}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <div class="kicker">Live Agent Improvement · P0 Themes</div>
+  <h1>Live Agent Experience — Scenario Catalog</h1>
+  <p class="sub">The end-to-end journey across employee, agent, and organization, with platform ownership and known failure points. Synthesized from the UX Improvements Memo and the Research Memo (217 escalations and support issues).</p>
+</header>
+
+<div class="page-view active">
+<h2 class="section" id="catalog" style="margin-top:12px">Scenario catalog</h2>
+<p class="section-sub">All scenarios per persona, grouped by the five P0 themes. <span class="tag happy">Happy path</span> is the ideal-state flow, <span class="tag edge">Edge</span> is expected variation the system must handle gracefully, <span class="tag fail">Failure</span> is a breakdown observed in the research.</p>
+<div class="subnav">
+  <a href="#employee"><span class="dot" style="background:var(--employee)"></span>Employee</a>
+  <a href="#agent"><span class="dot" style="background:var(--agent)"></span>Agent</a>
+  <a href="#organization"><span class="dot" style="background:var(--org)"></span>Organization</a>
+</div>
+
+<!-- ================= EMPLOYEE ================= -->
+<div class="persona-block" id="employee">
+  <div class="persona-head">
+    <h3><span class="dot" style="background:var(--employee)"></span>Employee</h3>
+    <p class="goal">Get timely help under the correct identity, in the active language, without repeating information — and always know what happens next.</p>
+  </div>
+
+  <div class="theme-group">
+    <h4>Access &amp; initiation</h4>
+    <p class="outcome">Start the right support option with clear steps and only relevant questions.</p>
+    <div class="scenario"><span class="sid">E1</span><span class="tag happy">Happy</span><p>Describes the need in Slack, Teams, or web; Live Agent is offered only when the request is eligible and the employee, channel, and team are available.</p></div>
+    <div class="scenario"><span class="sid">E2</span><span class="tag happy">Happy</span><p>Compares support options — each explains what it provides, which team helps, the expected wait, and what will be shared.</p></div>
+    <div class="scenario"><span class="sid">E3</span><span class="tag happy">Happy</span><p>Completes intake with known details pre-filled; asked only for missing information, with review before sharing.</p></div>
+    <div class="scenario"><span class="sid">E4</span><span class="tag happy">Happy</span><p>Confirms the handoff and receives clear confirmation that the request is submitted or queued.</p></div>
+    <div class="scenario"><span class="sid">E5</span><span class="tag edge">Edge</span><p>Request isn’t eligible (channel, domain, hours, profile) — Live Agent is not offered; an actionable alternative appears instead.</p></div>
+    <div class="scenario"><span class="sid">E6</span><span class="tag fail">Failure</span><p>Offered Live Agent for an unsupported request (e.g., HR domain) and reaches a dead end. <span class="src">Configurable Smart Handoff Message</span></p></div>
+    <div class="scenario"><span class="sid">E7</span><span class="tag fail">Failure</span><p>Forced through unnecessary steps or irrelevant questions — e.g., a ticket description required just to open an agent URL. <span class="src">LiveAgent URL handoff · Copilot Backstop</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Session reliability, identity &amp; status</h4>
+    <p class="outcome">Complete one session under the correct identity and always know its status.</p>
+    <div class="scenario"><span class="sid">E8</span><span class="tag happy">Happy</span><p>Authenticated and linked to the correct account before the session is created.</p></div>
+    <div class="scenario"><span class="sid">E9</span><span class="tag happy">Happy</span><p>Sees one persistent status — verifying, queued (position and wait), connecting, connected, ended, failed — throughout.</p></div>
+    <div class="scenario"><span class="sid">E10</span><span class="tag happy">Happy</span><p>Ends or exits with clear confirmation; resumes the same session after a retry or device change.</p></div>
+    <div class="scenario"><span class="sid">E11</span><span class="tag edge">Edge</span><p>Starts a new chat while one is active — the system returns them to the active session and blocks the duplicate.</p></div>
+    <div class="scenario"><span class="sid">E12</span><span class="tag edge">Edge</span><p>Disconnects or goes inactive — notified, then reconnected or closed safely (ghosted-chat recovery).</p></div>
+    <div class="scenario"><span class="sid">E13</span><span class="tag fail">Failure</span><p>Account-linking failure blocks the session or connects them as “Guest” under the wrong identity. <span class="src">Marriott — 171 “Guest Guest” chats in 3 days</span></p></div>
+    <div class="scenario"><span class="sid">E14</span><span class="tag fail">Failure</span><p>Conflicting status — “no agent available,” then “you’re in a queue”; or the availability message vanishes into a misleading “session ended” state. <span class="src">Copilot sales handoff</span></p></div>
+    <div class="scenario"><span class="sid">E15</span><span class="tag fail">Failure</span><p>Stuck in a chat and cannot exit — the session stays active for days. <span class="src">User stuck in chat</span></p></div>
+    <div class="scenario"><span class="sid">E16</span><span class="tag fail">Failure</span><p>Handoff times out before the agent connects, prompting retries that create ghost sessions and extra tickets. <span class="src">Premature timeout · ghost chats</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Context &amp; content continuity</h4>
+    <p class="outcome">Continue with an agent without repeating information or losing files and links.</p>
+    <div class="scenario"><span class="sid">E17</span><span class="tag happy">Happy</span><p>Previews, edits, or removes the summary, history, files, and links before sharing.</p></div>
+    <div class="scenario"><span class="sid">E18</span><span class="tag happy">Happy</span><p>Continues without repeating anything — intent, prior troubleshooting, attachments, and links travel with the handoff.</p></div>
+    <div class="scenario"><span class="sid">E19</span><span class="tag happy">Happy</span><p>Sees whether each message, file, or link reached the agent, with retry for failures.</p></div>
+    <div class="scenario"><span class="sid">E20</span><span class="tag edge">Edge</span><p>Reconnects, reroutes, or transfers — prior context is preserved, never re-entered.</p></div>
+    <div class="scenario"><span class="sid">E21</span><span class="tag fail">Failure</span><p>Repeats information already given to the bot; files, links, citations, or handoff actions fail. <span class="src">AWS Connect history · Citations in dev</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Language &amp; translation</h4>
+    <p class="outcome">Get support in the language being used, with automatic detection, routing, and translation.</p>
+    <div class="scenario"><span class="sid">E22</span><span class="tag happy">Happy</span><p>Writes in any supported language; the active conversation language is detected — not the profile default — and routed or translated automatically.</p></div>
+    <div class="scenario"><span class="sid">E23</span><span class="tag happy">Happy</span><p>Experiences the full journey localized: handoff, queue, status, error, fallback, and chat.</p></div>
+    <div class="scenario"><span class="sid">E24</span><span class="tag happy">Happy</span><p>Sees when translation is active, can view the original, and failures are clearly surfaced.</p></div>
+    <div class="scenario"><span class="sid">E25</span><span class="tag edge">Edge</span><p>Corrects an incorrect language detection with one action.</p></div>
+    <div class="scenario"><span class="sid">E26</span><span class="tag edge">Edge</span><p>Uses an unsupported language — offered a supported queue, another language, or a ticket or callback.</p></div>
+    <div class="scenario"><span class="sid">E27</span><span class="tag fail">Failure</span><p>Parts of the journey stay in the wrong language — an English waiting message inside a Spanish chat. <span class="src">Brokering strings · Partial translation</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Routing &amp; recovery</h4>
+    <p class="outcome">Reach an available team that matches the issue, profile, and policy.</p>
+    <div class="scenario"><span class="sid">E28</span><span class="tag happy">Happy</span><p>Routing runs before the request is created — intent, profile, language, hours, eligibility, availability, and capacity all checked.</p></div>
+    <div class="scenario"><span class="sid">E29</span><span class="tag happy">Happy</span><p>Sees the destination confirmed: team name, why it was selected, expected wait, next step.</p></div>
+    <div class="scenario"><span class="sid">E30</span><span class="tag edge">Edge</span><p>Preferred queue unavailable — offered another team, ticket, callback, or timed retry, with context preserved.</p></div>
+    <div class="scenario"><span class="sid">E31</span><span class="tag edge">Edge</span><p>Queue closes mid-wait — the system explains why and converts the active request to the chosen fallback.</p></div>
+    <div class="scenario"><span class="sid">E32</span><span class="tag fail">Failure</span><p>Sent to a queue with no available agents because availability was checked globally, not per queue. <span class="src">Queue-specific availability</span></p></div>
+  </div>
+</div>
+
+<!-- ================= AGENT ================= -->
+<div class="persona-block" id="agent">
+  <div class="persona-head">
+    <h3><span class="dot" style="background:var(--agent)"></span>Agent</h3>
+    <p class="goal">Resolve issues quickly — one accurate, well-routed request per employee, with complete context and reliable delivery.</p>
+  </div>
+
+  <div class="theme-group">
+    <h4>Access &amp; initiation</h4>
+    <p class="outcome">Receive the right request with enough context to help immediately.</p>
+    <div class="scenario"><span class="sid">A1</span><span class="tag happy">Happy</span><p>Receives a notification for an actionable request, with intent and handoff label visible.</p></div>
+    <div class="scenario"><span class="sid">A2</span><span class="tag happy">Happy</span><p>Validates the queue assignment and routing details; accepts or redirects via the queue directory.</p></div>
+    <div class="scenario"><span class="sid">A3</span><span class="tag fail">Failure</span><p>Receives a request with missing required fields or in the wrong queue — investigates from scratch or bounces it.</p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Session reliability, identity &amp; status</h4>
+    <p class="outcome">Know the current status of each request; handle one accurate request per employee.</p>
+    <div class="scenario"><span class="sid">A4</span><span class="tag happy">Happy</span><p>Verifies the request and the employee’s identity; identity warnings surfaced before accepting.</p></div>
+    <div class="scenario"><span class="sid">A5</span><span class="tag happy">Happy</span><p>Reviews accurate status, session details, and timestamps; accepts once.</p></div>
+    <div class="scenario"><span class="sid">A6</span><span class="tag happy">Happy</span><p>Messages with delivery confirmation in both directions.</p></div>
+    <div class="scenario"><span class="sid">A7</span><span class="tag happy">Happy</span><p>Transfers or closes with a status update, transcript, and ticket, so records stay connected.</p></div>
+    <div class="scenario"><span class="sid">A8</span><span class="tag fail">Failure</span><p>Wastes time on duplicate or empty ghost sessions that also create tickets. <span class="src">~80–100 tickets/month at one customer</span></p></div>
+    <div class="scenario"><span class="sid">A9</span><span class="tag fail">Failure</span><p>Cannot identify the employee — sessions arrive as “Guest Guest” or attributed to the bot. <span class="src">Marriott identity issues</span></p></div>
+    <div class="scenario"><span class="sid">A10</span><span class="tag fail">Failure</span><p>Receives the employee’s messages, but replies never reach the employee. <span class="src">Chat interaction issue — High urgency</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Context &amp; content continuity</h4>
+    <p class="outcome">Start with a clear summary and easy access to the full conversation and supporting content.</p>
+    <div class="scenario"><span class="sid">A11</span><span class="tag happy">Happy</span><p>Starts from a concise issue summary; expands to the full conversation history when needed.</p></div>
+    <div class="scenario"><span class="sid">A12</span><span class="tag happy">Happy</span><p>Checks supporting files, links, and source citations delivered with the handoff.</p></div>
+    <div class="scenario"><span class="sid">A13</span><span class="tag happy">Happy</span><p>Responds, resolves, or transfers with resolution notes; context preserved for the next team.</p></div>
+    <div class="scenario"><span class="sid">A14</span><span class="tag fail">Failure</span><p>Receives only the latest chat instead of the full conversation, or no summary — the employee repeats troubleshooting. <span class="src">AWS Connect · Toyota summary request</span></p></div>
+    <div class="scenario"><span class="sid">A15</span><span class="tag fail">Failure</span><p>Attachments intermittently invisible; KB links render as plain text; agent name or image displays incorrectly. <span class="src">Attachment failures · KB links</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Language &amp; translation</h4>
+    <p class="outcome">Understand the employee’s language and communicate accurately, with or without translation.</p>
+    <div class="scenario"><span class="sid">A16</span><span class="tag happy">Happy</span><p>Receives requests matched to the detected language via language-based queues.</p></div>
+    <div class="scenario"><span class="sid">A17</span><span class="tag happy">Happy</span><p>Reviews the language badge and a bilingual summary before responding.</p></div>
+    <div class="scenario"><span class="sid">A18</span><span class="tag happy">Happy</span><p>Responds in the right mode — native or translated — with a confidence indicator in the composer.</p></div>
+    <div class="scenario"><span class="sid">A19</span><span class="tag edge">Edge</span><p>Handles a translation failure via a clear error state; the bilingual transcript preserves both versions.</p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Routing &amp; policy controls</h4>
+    <p class="outcome">Receive requests that match the queue, skills, and available capacity.</p>
+    <div class="scenario"><span class="sid">A20</span><span class="tag happy">Happy</span><p>Manages presence and queue availability so routing reflects real capacity.</p></div>
+    <div class="scenario"><span class="sid">A21</span><span class="tag happy">Happy</span><p>Sees the routing reason on each assignment — why this request matched this queue.</p></div>
+    <div class="scenario"><span class="sid">A22</span><span class="tag edge">Edge</span><p>Flags a misroute; transfers through the directory with preserved context and a resolution code.</p></div>
+    <div class="scenario"><span class="sid">A23</span><span class="tag fail">Failure</span><p>Receives requests mismatched to skills or capacity — queue mapping doesn’t reflect the employee’s actual queue.</p></div>
+  </div>
+</div>
+
+<!-- ================= ORGANIZATION ================= -->
+<div class="persona-block" id="organization">
+  <div class="persona-head">
+    <h3><span class="dot" style="background:var(--org)"></span>Organization</h3>
+    <p class="goal">Deliver reliable support while managing demand and costs — configurable, testable, measurable operations.</p>
+  </div>
+
+  <div class="theme-group">
+    <h4>Access &amp; initiation</h4>
+    <p class="outcome">Control when Live Agent appears, what it says, and what information it collects.</p>
+    <div class="scenario"><span class="sid">O1</span><span class="tag happy">Happy</span><p>Sets eligibility and intent rules that govern exactly when Live Agent appears.</p></div>
+    <div class="scenario"><span class="sid">O2</span><span class="tag happy">Happy</span><p>Configures the handoff — copy, intake form, fallbacks — including how much self-service happens before escalation.</p></div>
+    <div class="scenario"><span class="sid">O3</span><span class="tag happy">Happy</span><p>Previews per channel, tests safely, publishes, and monitors handoff analytics.</p></div>
+    <div class="scenario"><span class="sid">O4</span><span class="tag fail">Failure</span><p>A configured domain trigger doesn’t surface the expected option; entry points drift from configuration. <span class="src">Custom domain triggers</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Session reliability, identity &amp; status</h4>
+    <p class="outcome">Prevent and quickly diagnose failed, duplicate, stuck, or misidentified sessions.</p>
+    <div class="scenario"><span class="sid">O5</span><span class="tag happy">Happy</span><p>Defines lifecycle states and identity mapping so both platforms agree on “active,” “ended,” and “failed.”</p></div>
+    <div class="scenario"><span class="sid">O6</span><span class="tag happy">Happy</span><p>Sets retry, duplicate-suppression, and timeout policies — including a configurable suppression period.</p></div>
+    <div class="scenario"><span class="sid">O7</span><span class="tag happy">Happy</span><p>Tests the end-to-end lifecycle; monitors reliability with alerts and release quality gates (stuck sessions, drop-offs, failed handoffs).</p></div>
+    <div class="scenario"><span class="sid">O8</span><span class="tag edge">Edge</span><p>Diagnoses a failed or stuck session by searching shared IDs across both platforms; recovers via safe DLQ replay.</p></div>
+    <div class="scenario"><span class="sid">O9</span><span class="tag fail">Failure</span><p>Cannot trace a session across Moveworks and ServiceNow — IDs, states, and lifecycle events aren’t shared. <span class="src">Data API interaction IDs</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Context &amp; content continuity</h4>
+    <p class="outcome">Control what context is shared and confirm it reaches the agent.</p>
+    <div class="scenario"><span class="sid">O10</span><span class="tag happy">Happy</span><p>Defines required context fields, consent, redaction, and retention policies.</p></div>
+    <div class="scenario"><span class="sid">O11</span><span class="tag happy">Happy</span><p>Sets content rules — summary settings, history depth, file security.</p></div>
+    <div class="scenario"><span class="sid">O12</span><span class="tag happy">Happy</span><p>Maps payload fields per platform; validates them in a channel test environment before launch.</p></div>
+    <div class="scenario"><span class="sid">O13</span><span class="tag happy">Happy</span><p>Monitors delivery logs, alerts on failed transfers, reviews context analytics.</p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Language &amp; translation</h4>
+    <p class="outcome">Set up and monitor detection, routing, translation, and fallbacks across channels.</p>
+    <div class="scenario"><span class="sid">O14</span><span class="tag happy">Happy</span><p>Defines supported languages and automatic detection based on the active conversation.</p></div>
+    <div class="scenario"><span class="sid">O15</span><span class="tag happy">Happy</span><p>Maps language skills to queues — e.g., Spanish and Portuguese speakers routed to native-language queues instead of translating. <span class="src">GM language queueing</span></p></div>
+    <div class="scenario"><span class="sid">O16</span><span class="tag happy">Happy</span><p>Sets the translation provider, localized copy, and fallbacks — including dual-language transcripts. <span class="src">Unilever transcripts</span></p></div>
+    <div class="scenario"><span class="sid">O17</span><span class="tag happy">Happy</span><p>Tests per channel; monitors language analytics for detection, routing, and translation quality.</p></div>
+    <div class="scenario"><span class="sid">O18</span><span class="tag fail">Failure</span><p>Partially translated experiences reach employees — handoff or waiting strings stay in English — undermining regional rollouts. <span class="src">Partial translation</span></p></div>
+  </div>
+
+  <div class="theme-group">
+    <h4>Routing &amp; policy controls</h4>
+    <p class="outcome">Control eligibility, routing, priority, capacity, overflow, and fallback rules.</p>
+    <div class="scenario"><span class="sid">O19</span><span class="tag happy">Happy</span><p>Builds routing policies on issue and employee profile, language, and hours — including VIPs, sensitive topics, alternate desks. <span class="src">JPMC headless routing</span></p></div>
+    <div class="scenario"><span class="sid">O20</span><span class="tag happy">Happy</span><p>Maps queues, availability, capacity, and overflow so offers reflect the employee’s actual queue.</p></div>
+    <div class="scenario"><span class="sid">O21</span><span class="tag happy">Happy</span><p>Sets and tests fallbacks in the workflow builder; simulates policies before publishing.</p></div>
+    <div class="scenario"><span class="sid">O22</span><span class="tag happy">Happy</span><p>Publishes with versioning and rollback; monitors routing analytics and the audit log.</p></div>
+    <div class="scenario"><span class="sid">O23</span><span class="tag fail">Failure</span><p>Multi-ITSM configurations route ticket updates to the wrong ServiceNow instance. <span class="src">Multi-ITSM misrouting</span></p></div>
+    <div class="scenario"><span class="sid">O24</span><span class="tag edge">Edge</span><p>Confirms platform ownership with the ServiceNow AWA team — queues, capacity, transfers, session status, translation fallbacks, rollback.</p></div>
+  </div>
+</div>
+
+</div>
+
+
+<p class="footnote">Sources: Live Agents UX Improvements Memo (P0 use cases, persona journeys, platform ownership, Camila end-to-end experience) and Live Agents UX Improvements Research Memo (217 tickets — 98 product escalations, 119 support issues). Gray references point to the escalations and support issues cited in the research memo.</p>
+
+</div>
+</body>
+</html>
