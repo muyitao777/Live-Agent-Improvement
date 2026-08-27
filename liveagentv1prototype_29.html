@@ -1,0 +1,2087 @@
+<title>Live Agent V1 Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Lato:wght@400;700;900&display=swap">
+<style>
+/* ---------- shell tokens ---------- */
+:root{
+  --ground:#F5F5F6; --panel:#FFFFFF; --ink:#212327; --muted:#6E7176;
+  --line:#E3E4E6; --accent:#414750; --accent-soft:#ECEEF0; --accent-ink:#2E343B;
+  --ok:#1F845A; --ok-soft:#E4F3EC; --warn:#B25E09; --warn-soft:#FBF0E0;
+  --chip:#EBECEE; --shadow:0 10px 30px rgba(33,35,39,.10);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#141517; --panel:#1E2022; --ink:#ECEDEF; --muted:#9A9DA2;
+    --line:#2F3134; --accent:#C6CAD1; --accent-soft:#2A2D31; --accent-ink:#D8DBE0;
+    --ok:#4CC38A; --ok-soft:#193327; --warn:#E3A45C; --warn-soft:#33270F;
+    --chip:#292B2E; --shadow:0 10px 30px rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#141517; --panel:#1E2022; --ink:#ECEDEF; --muted:#9A9DA2;
+  --line:#2F3134; --accent:#C6CAD1; --accent-soft:#2A2D31; --accent-ink:#D8DBE0;
+  --ok:#4CC38A; --ok-soft:#193327; --warn:#E3A45C; --warn-soft:#33270F;
+  --chip:#292B2E; --shadow:0 10px 30px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:16px; line-height:1.45; height:100vh; overflow:hidden;
+}
+button{font:inherit; cursor:pointer}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+.app{display:flex; flex-direction:column; height:100vh}
+
+/* ---------- top bar ---------- */
+.bar{
+  display:flex; align-items:center; gap:16px; padding:10px 18px;
+  border-bottom:1px solid var(--line); background:var(--panel); flex:none;
+}
+.bar-title{font-weight:700; font-size:17px; display:flex; align-items:center; gap:9px; white-space:nowrap}
+.bar-sub{color:var(--muted); font-weight:500; font-size:14.5px; margin-left:2px}
+.bar-controls{margin-left:auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.seg{display:flex; background:var(--chip); border-radius:8px; padding:3px; gap:2px}
+.seg button{
+  border:0; background:transparent; color:var(--muted); border-radius:6px;
+  padding:5px 11px; font-size:14.5px; font-weight:600;
+}
+.seg button.on{background:var(--panel); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.btn-restart{
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+  border-radius:8px; padding:5px 12px; font-size:14.5px; font-weight:600;
+}
+.btn-restart:hover{color:var(--ink); border-color:var(--muted)}
+
+/* ---------- columns ---------- */
+.cols{flex:1; display:grid; grid-template-columns:280px minmax(0,1fr) var(--notes-w,392px); min-height:0}
+/* drag handle on the annotation panel's left edge */
+.notes-resizer{position:absolute; top:0; bottom:0; right:var(--notes-w,392px); width:10px; transform:translateX(5px); cursor:col-resize; z-index:15; touch-action:none}
+.notes-resizer::after{content:""; position:absolute; left:4px; top:0; bottom:0; width:2px; background:transparent; border-radius:2px; transition:background .15s}
+.notes-resizer:hover::after,.notes-resizer.dragging::after{background:var(--accent)}
+/* collapsed annotation panel — a slim strip with a vertical label */
+.n-toggle{position:absolute; top:14px; right:0; border:1px solid var(--line); background:var(--panel); color:var(--muted); border-radius:7px; width:26px; height:26px; display:grid; place-items:center; cursor:pointer; font-size:14px; line-height:1}
+.n-toggle:hover{color:var(--ink); border-color:var(--muted)}
+.n-collapsed-tab{display:none}
+.cols.nclosed{grid-template-columns:280px minmax(0,1fr) 44px}
+.cols.nclosed .notes-resizer,.cols.nclosed .n-hdr,.cols.nclosed #notesBody{display:none}
+.cols.nclosed .notes{padding:0; overflow:hidden}
+.cols.nclosed .n-collapsed-tab{display:flex; flex-direction:column; align-items:center; gap:12px; width:100%; height:100%; border:0; background:transparent; color:var(--muted); padding:16px 0; cursor:pointer; font-family:inherit}
+.n-collapsed-tab:hover{color:var(--ink); background:var(--chip)}
+.n-collapsed-tab .chev{font-size:15px}
+.n-collapsed-tab .vlabel{writing-mode:vertical-rl; font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase}
+
+/* ---------- journey rail ---------- */
+.rail{border-right:1px solid var(--line); overflow-y:auto; padding:14px 10px 20px; background:var(--panel)}
+.rail-label{font-family:"IBM Plex Mono",monospace; font-size:13.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); padding:0 8px 8px}
+.stg{
+  display:flex; gap:10px; align-items:flex-start; width:100%; text-align:left;
+  border:0; background:transparent; color:var(--ink);
+  padding:8px; border-radius:9px; margin-bottom:2px;
+}
+.stg:hover{background:var(--chip)}
+.stg .num{
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-weight:600;
+  width:22px; height:22px; border-radius:50%; flex:none; display:grid; place-items:center;
+  border:1.5px solid var(--line); color:var(--muted); margin-top:1px;
+}
+.stg .t{min-width:0}
+.stg .t b{display:block; font-size:16.5px; font-weight:600; line-height:1.3}
+.stg .t small{display:block; color:var(--muted); font-size:14.5px; margin-top:2px}
+.stg.done .num{background:var(--ok); border-color:var(--ok); color:#fff}
+.stg.cur{background:var(--accent-soft)}
+.stg.cur .num{background:var(--accent); border-color:var(--accent); color:var(--panel)}
+.stg.cur .t b{color:var(--accent-ink)}
+.stg.skip{opacity:.45}
+.stg.skip .num{border-style:dashed}
+.stg.peek{opacity:.9; outline:1.5px dashed var(--accent); outline-offset:-1.5px}
+.rail-hint{margin:12px 8px 0; padding:11px 12px; border:1px dashed var(--line); border-radius:9px; color:var(--muted); font-size:15px; line-height:1.5}
+.rail-hint b{color:var(--ink)}
+
+/* ---------- center / slack ---------- */
+.stage-center{min-width:0; display:flex; padding:16px; overflow:hidden}
+.sk{
+  flex:1; min-width:0; display:flex; flex-direction:column; border-radius:11px; overflow:hidden;
+  box-shadow:var(--shadow); border:1px solid var(--line); position:relative;
+  font-family:"Lato","Helvetica Neue",Helvetica,Arial,sans-serif; background:#FFFFFF; color:#1D1C1D;
+}
+/* slack top bar */
+.sk-top{background:#2E0A30; color:#fff; height:40px; display:flex; align-items:center; padding:0 14px; gap:12px; flex:none}
+.sk-top .nav{opacity:.75; font-size:16px; letter-spacing:2px}
+.sk-search{
+  flex:1; max-width:540px; margin:0 auto; background:rgba(255,255,255,.22); border-radius:6px;
+  color:#fff; font-size:13px; padding:4px 10px; display:flex; align-items:center; gap:7px;
+}
+.sk-search span{opacity:.85}
+.sk-top .clock{opacity:.75; font-size:14px}
+.sk-body{flex:1; display:flex; min-height:0}
+/* sidebar — modern Slack: icon rail + list panel */
+.sk-side{flex:none; display:flex; overflow:hidden}
+.sk-side svg{fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
+.sk-rail{width:62px; flex:none; background:#2E0A30; color:#D9C2DA; display:flex; flex-direction:column; align-items:center; padding:10px 0 12px; gap:3px}
+.ws-logo{width:34px; height:34px; border-radius:9px; background:#76B900; display:grid; place-items:center; margin-bottom:8px; box-shadow:0 0 0 1px rgba(255,255,255,.18); overflow:hidden}
+.ws-logo svg{width:30px; height:30px; display:block; fill:#fff !important; stroke:none !important}
+.rail-btn{position:relative; width:54px; border:0; background:transparent; color:#D9C2DA; display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 0 5px; font-size:11px; font-weight:700; font-family:inherit}
+.rail-btn .ri{width:34px; height:26px; border-radius:8px; display:grid; place-items:center}
+.rail-btn .ri svg{width:18px; height:18px}
+.rail-btn:hover .ri{background:rgba(255,255,255,.12)}
+.rail-btn.on{color:#fff}
+.rail-btn.on .ri{background:rgba(255,255,255,.24)}
+.rail-badge{position:absolute; top:-1px; right:8px; background:#C4295D; color:#fff; font-size:10px; font-weight:900; border-radius:9px; padding:1px 5px; border:2px solid #2E0A30}
+.rail-foot{margin-top:auto; display:flex; flex-direction:column; align-items:center; gap:9px}
+.rail-circle{width:32px; height:32px; border-radius:50%; border:0; background:rgba(255,255,255,.14); color:#fff; font-size:15px; display:grid; place-items:center}
+.rail-circle svg{width:16px;height:16px}
+.rail-me{position:relative; width:32px; height:32px; border-radius:8px; background:#B45309; color:#fff; font-weight:900; font-size:13px; display:grid; place-items:center}
+.rail-me .dot2{position:absolute; right:-3px; bottom:-3px; width:11px; height:11px; border-radius:50%; background:#2BAC76; border:2.5px solid #2E0A30}
+.sk-list{width:248px; flex:none; background:#451B49; color:#DCC6DD; display:flex; flex-direction:column; overflow-y:auto; position:relative}
+.sk-ws{padding:12px 14px 6px; color:#fff; font-weight:900; font-size:18px; display:flex; align-items:center; gap:5px}
+.sk-ws .chev{font-size:12px; opacity:.8; margin-top:2px}
+.sk-ws .ws-icons{margin-left:auto; display:flex; gap:12px; color:#D9C2DA}
+.sk-ws .ws-icons svg{width:16px; height:16px}
+.sk-find{margin:2px 12px 10px; background:rgba(255,255,255,.14); border-radius:8px; padding:6px 10px; font-size:13px; color:rgba(255,255,255,.78); display:flex; align-items:center; gap:7px}
+.sk-find svg{width:14px; height:14px; flex:none}
+.sk-side section{padding:8px 0 6px}
+.sk-side section + section{border-top:1px solid rgba(255,255,255,.12)}
+.sk-side h4{margin:0; padding:4px 16px 3px; font-size:15px; font-weight:700; color:#DCC6DD; display:flex; align-items:center; gap:8px}
+.sk-side h4 svg{width:14px; height:14px; opacity:.9}
+.starred-hint{padding:1px 16px 6px; font-size:13px; color:rgba(255,255,255,.55)}
+.sk-item{display:flex; align-items:center; gap:8px; margin:0 8px; padding:3.5px 8px; border-radius:7px; font-size:15px; color:#DCC6DD; border:0; background:transparent; width:calc(100% - 16px); text-align:left; font-family:inherit}
+.sk-item:hover{background:rgba(255,255,255,.1)}
+.sk-item .pfx{opacity:.75; width:15px; text-align:center; flex:none; font-size:14px}
+.sk-item .pfx svg{width:13px; height:13px; display:block; margin:0 auto}
+.sk-item.unread{color:#fff; font-weight:900}
+.sk-item.active{background:rgba(255,255,255,.24); color:#fff}
+.sk-item .cnt{margin-left:auto; font-size:12.5px; opacity:.8}
+.sk-item .presence{width:8px;height:8px;border-radius:50%;background:#2BAC76;flex:none;margin:0 3px}
+.sk-item .presence.off{background:transparent;border:1.5px solid #DCC6DD}
+.sk-item .badge{margin-left:auto; background:#CD2553; color:#fff; font-size:10.5px; font-weight:700; border-radius:9px; padding:1px 7px}
+.sk-item .bot-sq{width:18px;height:18px;border-radius:4px;background:#1A1A1A;color:#fff;font-size:10px;display:grid;place-items:center;flex:none;font-weight:900;letter-spacing:-.02em}
+.unread-pill{position:sticky; bottom:10px; margin:8px auto 10px; background:#EFE3F0; color:#3F0E40; border-radius:18px; padding:6px 14px; font-size:13px; font-weight:800; width:max-content; box-shadow:0 3px 10px rgba(0,0,0,.35)}
+/* chat pane */
+.sk-chat{flex:1; min-width:0; display:flex; flex-direction:column; background:#fff}
+.sk-head{flex:none; border-bottom:1px solid #DDD; padding:9px 16px; display:flex; align-items:center; gap:10px}
+.sk-head .av{width:26px;height:26px;border-radius:6px}
+.sk-head b{font-size:15px}
+.sk-head small{color:#616061; font-size:13px}
+.sk-feed{flex:1; overflow-y:auto; padding:14px 0 8px; scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ .sk-feed{scroll-behavior:auto} }
+/* messages */
+.msg{display:flex; gap:9px; padding:5px 18px; align-items:flex-start}
+.msg.new{animation:rise .28s ease-out}
+@keyframes rise{from{opacity:0; transform:translateY(7px)}to{opacity:1; transform:none}}
+@media (prefers-reduced-motion: reduce){ .msg.new{animation:none} }
+.av{width:36px;height:36px;border-radius:6px;flex:none;display:grid;place-items:center;color:#fff;font-weight:900;font-size:14px}
+.av.bot{background:#E5E0D8; padding:2px}
+.av.bot svg,.bot-sq svg{width:100%; height:100%; display:block}
+.bot-sq.m8-avatar{background:#E5E0D8 !important; padding:1px}
+.av.cam{background:#B45309}
+.av.maria{background:#0E7490}
+.av.diego{background:#1D4ED8}
+.av.alex{background:#B4335A}
+.m-body{min-width:0; flex:1}
+.m-head{display:flex; align-items:baseline; gap:7px}
+.m-head b{font-size:15px}
+.m-head .app-tag{background:#E8E8E8; color:#616061; font-size:10px; font-weight:700; border-radius:3px; padding:1px 4px; letter-spacing:.02em}
+.m-head time{color:#616061; font-size:12px}
+.m-text{font-size:15px; line-height:1.467; margin-top:1px}
+.m-text p{margin:0 0 5px}
+.m-text p:last-child{margin-bottom:0}
+.agent-line{font-weight:900; font-size:15px; margin:1px 0 6px}
+.delivered{color:#616061; font-size:12px; margin-top:3px}
+.delivered .tick{color:#007A5A; font-weight:700}
+.trans-tag{color:#616061; font-size:12.5px; margin-top:4px; font-style:italic}
+.trans-tag a{color:#1264A3; text-decoration:none; font-style:normal}
+/* system + divider */
+.sk-div{display:flex; align-items:center; gap:10px; padding:8px 18px; color:#616061; font-size:13px}
+.sk-div::before,.sk-div::after{content:""; flex:1; height:1px; background:#DDD}
+.sk-div span{border:1px solid #DDD; border-radius:22px; padding:2px 11px; font-weight:700; font-size:13px; background:#fff}
+.sk-sys{padding:3px 18px 3px 63px; color:#616061; font-size:15px}
+.sk-sys .sysline{border-left:3px solid #DDD; padding:2px 10px}
+/* the same quiet line, but inside a message — session state is m8's output */
+.m-sys{border-left:3px solid #DDD; padding:2px 10px; color:#616061; font-size:15px; line-height:1.5}
+.m-sys+p{margin-top:8px}
+/* director note (prototype narration, deliberately non-slack) */
+.note{margin:9px 18px; padding:9px 12px 9px 14px; border-radius:8px;
+  background:var(--accent-soft); color:var(--accent-ink);
+  font-family:"IBM Plex Sans",sans-serif; font-size:14.5px; line-height:1.45;
+  border-left:3px solid var(--accent)}
+.note .lbl{display:block; font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; opacity:.75; margin-bottom:2px}
+/* cards (block kit) */
+.card{border:1px solid #DDD; border-radius:8px; margin-top:7px; max-width:560px; overflow:hidden; background:#fff}
+.card .c-head{padding:9px 13px 7px; font-weight:900; font-size:15px; display:flex; align-items:center; gap:7px}
+.card .c-head.okc{color:#007A5A}
+.card .c-head.warnc{color:#A15C07}
+.card .c-sub{padding:0 13px 9px; color:#454245; font-size:15px}
+.crow{display:flex; gap:9px; padding:6px 13px; font-size:15px; border-top:1px solid #F0F0F0; align-items:flex-start}
+.crow .ic{flex:none; width:18px; text-align:center}
+.crow .ic.ok{color:#007A5A; font-weight:900}
+.crow small{display:block; color:#616061; font-size:15px}
+.card .crow:first-child{border-top:0; padding-top:10px}
+.copt{margin:8px 13px; border:1px solid #DDD; border-radius:8px; padding:10px 12px}
+.copt.hi{border-color:#007A5A; box-shadow:0 0 0 1px #007A5A22; background:#F6FBF9}
+.copt b{font-size:15px}
+.copt .meta{color:#616061; font-size:13px; margin-top:2px}
+.on{color:#007A5A; font-weight:700}
+.c-actions{display:flex; gap:8px; padding:10px 13px 12px; flex-wrap:wrap; border-top:1px solid #F0F0F0}
+.sbtn{
+  border:1px solid #BABABA; background:#fff; color:#1D1C1D; border-radius:5px;
+  padding:6px 13px; font-weight:700; font-size:13px; font-family:inherit;
+}
+.sbtn:hover{background:#F8F8F8}
+.sbtn:active{background:#E8E8E8}
+.sbtn.primary{background:#007A5A; border-color:#007A5A; color:#fff}
+.sbtn.primary:hover{background:#148567}
+.sbtn.primary:active{background:#00573F}
+.sbtn:focus-visible{outline:none; box-shadow:0 0 0 2px #fff, 0 0 0 4px #1264A3}
+.sbtn-spin{display:inline-block; width:13px; height:13px; border:2px solid #DDD; border-top-color:#868686; border-radius:50%; margin-left:7px; vertical-align:middle; animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){ .sbtn-spin{animation:none; opacity:.5} }
+.sbtn.pulse{animation:pulse 1.5s ease-in-out infinite; position:relative}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(65,71,80,.5)}50%{box-shadow:0 0 0 7px rgba(65,71,80,0)}}
+@media (prefers-reduced-motion: reduce){ .sbtn.pulse{animation:none; outline:2px solid #414750; outline-offset:2px} }
+/* task card — Slack AI-steps / plan block pattern */
+.tcard{padding-bottom:2px}
+.t-head{display:flex; align-items:center; gap:10px; width:100%; border:0; background:transparent; padding:11px 13px 8px; font-family:inherit; cursor:pointer; text-align:left}
+.t-head b{font-size:15px; font-weight:900; color:#1D1C1D}
+.t-badge{width:22px; height:22px; border-radius:50%; background:#1D1C1D; color:#fff; display:grid; place-items:center; font-size:12px; font-weight:900; flex:none}
+.t-badge.working{background:transparent}
+.t-chev{margin-left:auto; color:#616061; font-size:13px; transition:transform .2s}
+.tcard.closed .t-chev{transform:rotate(180deg)}
+.tcard.closed .t-body,.tcard.closed .c-note{display:none}
+.t-body{padding:0 13px 8px}
+.t-step{padding:4px 0}
+.t-step .t-ic{display:inline-block; width:20px; color:#1D1C1D; vertical-align:-2px}
+.t-ic svg{width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round}
+.t-badge svg{width:12px; height:12px; fill:none; stroke:#fff; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round}
+.ring{display:inline-block; width:13px; height:13px; border:2px solid #E7E0ED; border-top-color:#7C3AED; border-radius:50%; animation:spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){ .ring{animation:none; border-top-color:#7C3AED} }
+.t-head b.shimmer{background:linear-gradient(90deg,#B07CD6 0%,#DCC3EC 25%,#8E44AD 50%,#DCC3EC 75%,#B07CD6 100%); background-size:200% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; animation:shimmer 2.2s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+@media (prefers-reduced-motion: reduce){ .t-head b.shimmer{animation:none; color:#8E44AD; background:none} }
+.status-note{color:#616061; font-size:13px; margin-top:7px; max-width:560px; line-height:1.5}
+.status-note a{color:#1264A3; text-decoration:none}
+.recap-ref{color:#616061; font-size:13px; margin:7px 0 2px}
+.t-t{font-size:15px; font-weight:700; color:#1D1C1D}
+.t-step.final .t-t{font-weight:900}
+.t-subs{margin:4px 0 2px 6px; border-left:3px solid #E4E4E4; padding-left:13px; position:relative}
+.t-subs::after{content:""; position:absolute; left:-1px; bottom:-4px; width:5px; height:5px; border-radius:50%; background:#E4E4E4; transform:translateX(-1px)}
+.t-sub{color:#454245; font-size:15px; padding:1px 0; line-height:1.45}
+.mini-spin{display:inline-block; width:12px; height:12px; border:2px solid #DDD; border-top-color:#868686; border-radius:50%; animation:spin .8s linear infinite; vertical-align:-1px}
+@media (prefers-reduced-motion: reduce){ .mini-spin{animation:none} }
+/* status card */
+.stat-row{padding:5px 13px; font-size:15px}
+.stat-row.done{color:#616061}
+.stat-row.done::before{content:"✓  "; color:#007A5A; font-weight:900}
+.stat-row.live{font-weight:700}
+.stat-row.ok-final{font-weight:900; color:#007A5A}
+.stat-row.ok-final::before{content:"✓  "; font-weight:900}
+.c-note{padding:7px 13px 10px; color:#616061; font-size:12px; border-top:1px solid #F0F0F0}
+.c-note a{color:#1264A3; text-decoration:none}
+/* plain message helpers — context line + bare button row (native section/context/actions) */
+.inline-sys{border-left:3px solid #DDD; padding:2px 10px; color:#616061; font-size:13px; margin-top:7px}
+.ctx-line{color:#1D1C1D; font-size:15px; margin-top:2px; max-width:560px; line-height:1.467}
+.btn-row{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap}
+/* section with accessory button (native Block Kit section + accessory) */
+.sec-acc{display:flex; gap:14px; align-items:flex-start; max-width:560px; margin-top:3px}
+.sec-acc .sa-text{flex:1; font-size:15px; line-height:1.467}
+.sec-acc .sbtn{flex:none; margin-top:2px}
+/* attachment */
+.attach{border:1px solid #DDD; border-radius:8px; margin-top:7px; max-width:330px; overflow:hidden}
+.attach .thumb{height:96px; background:repeating-linear-gradient(45deg,#F3F3F3,#F3F3F3 8px,#EDEDED 8px,#EDEDED 16px); display:grid; place-items:center}
+.attach .thumb .fake-dialog{background:#fff; border:1px solid #C9C9C9; border-radius:6px; padding:7px 13px; font-size:11px; color:#8A2A2A; box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.attach .a-meta{padding:7px 11px; font-size:13px; display:flex; gap:7px; align-items:center}
+.attach .a-meta b{font-size:13px}
+.attach .a-meta small{color:#616061}
+/* branch chip */
+.branch{margin:10px 18px; padding:12px 14px; border-radius:10px; border:1.5px dashed var(--accent);
+  background:var(--accent-soft); color:var(--accent-ink); font-family:"IBM Plex Sans",sans-serif}
+.branch .lbl{font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; opacity:.8}
+.branch p{margin:4px 0 9px; font-size:15px; font-weight:600}
+.branch .bb{display:flex; gap:8px; flex-wrap:wrap}
+.bbtn{border:1.5px solid var(--accent); background:var(--panel); color:var(--ink);
+  border-radius:8px; padding:8px 13px; font-weight:600; font-size:14.5px}
+.bbtn:hover{background:var(--accent-soft)}
+.bbtn.chosen{background:var(--accent); color:var(--panel)}
+.bbtn.pulse{animation:pulse 1.5s ease-in-out infinite}
+/* composer */
+.sk-comp{flex:none; margin:0 18px 16px; border:1px solid #8D8D8D66; border-radius:9px; overflow:hidden}
+.sk-comp .fmt{display:flex; gap:12px; padding:6px 10px; background:#F8F8F8; color:#616061; font-size:13px; border-bottom:1px solid #EEE}
+.sk-comp .inp{display:block; width:100%; border:0; padding:9px 12px; font-size:15px; line-height:1.467; font-family:inherit; color:#1D1C1D; background:#fff; outline:none; resize:none; overflow:hidden}
+.sk-comp .inp::placeholder{color:#9B9B9B}
+.sk-comp .tools{display:flex; align-items:center; gap:11px; padding:5px 8px 7px 12px; color:#868686; font-size:15px}
+.tool-btn{border:0; background:transparent; color:#868686; font-size:15px; padding:2px 6px; border-radius:6px; font-family:inherit}
+.tool-btn.pulse{animation:pulse 1.5s ease-in-out infinite; color:#1D1C1D}
+.comp-attach{display:flex; align-items:center; gap:9px; margin:9px 12px 0; border:1px solid #DDD; border-radius:8px; padding:6px 10px; font-size:13px; width:max-content; background:#fff}
+.comp-attach small{color:#616061}
+.ca-thumb{width:28px; height:28px; border-radius:5px; border:1px solid #E4E4E4; background:repeating-linear-gradient(45deg,#F4F4F4,#F4F4F4 4px,#ECECEC 4px,#ECECEC 8px); flex:none}
+@media (prefers-reduced-motion: reduce){ .tool-btn.pulse{animation:none; outline:2px solid #414750; outline-offset:2px} }
+.send{margin-left:auto; border:0; border-radius:5px; padding:4px 11px; background:#EEE; color:#AAA; font-weight:900; font-size:13px; font-family:inherit}
+.send.ready{background:#007A5A; color:#fff}
+.send.pulse{animation:pulse 1.5s ease-in-out infinite}
+/* full-screen starting point — covers the stage until the session starts */
+.cols{position:relative}
+.cover{position:absolute; inset:0; background:var(--ground); display:grid; place-items:center; z-index:20; overflow-y:auto}
+.cover-in{max-width:600px; padding:40px 32px}
+.cover-head{display:flex; align-items:center; gap:16px; margin-bottom:26px}
+.cover-mascot{width:64px; height:64px; display:block; flex:none; background:#E5E0D8; border-radius:14px; padding:5px; box-shadow:0 6px 14px rgba(0,0,0,.10)}
+.cover-mascot svg{width:100%; height:100%}
+.cover-kicker{font-weight:600; font-size:16.5px}
+.cover-kicker small{display:block; font-weight:400; font-size:15px; color:var(--muted); margin-top:1px}
+.cover h2{font-size:34px; line-height:1.22; margin:0 0 12px; font-weight:700}
+/* the seven journey stages, as scannable chips */
+.cover-steps{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 20px}
+.cstep{display:flex; align-items:center; gap:8px; background:var(--chip); border-radius:18px; padding:5px 13px 5px 6px; font-size:14.5px; font-weight:600; color:var(--ink)}
+.cstep .n{width:21px; height:21px; border-radius:50%; background:var(--accent); color:var(--panel); font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:600; display:grid; place-items:center; flex:none}
+.cover p{color:var(--ink); font-size:17.5px; line-height:1.6; margin:0 0 22px}
+.cover-details{display:grid; grid-template-columns:1fr 1fr; gap:14px 28px; margin:0 0 26px; padding:18px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+.cover-details dt{font-size:14.5px; color:var(--muted); margin:0}
+.cover-details dd{font-size:16.5px; margin:2px 0 0; font-weight:500}
+.go{border:0; background:var(--accent); color:var(--panel); border-radius:9px; padding:12px 26px; font-weight:700; font-size:17px}
+.go:hover{filter:brightness(1.07)}
+.cover-hint{margin-top:16px; font-size:15px; color:var(--muted); line-height:1.5}
+/* branch selector — the availability decision, nested in the rail at the stage that asks it */
+.stage-center{flex-direction:column}
+.stg-sub{margin:1px 0 6px 38px; padding:4px 6px 6px}
+.ss-q{font-size:13px; font-weight:600; color:var(--muted); padding:2px 6px 5px; line-height:1.3}
+.stg-sub.pending .ss-q{color:var(--accent-ink)}
+.ss-opt,.ss-r{display:flex; align-items:baseline; gap:8px; width:100%; text-align:left; border:0; background:transparent;
+  color:var(--muted); padding:4px 7px; border-radius:6px; font-size:14.5px; line-height:1.35; font-family:inherit}
+.ss-opt:hover,.ss-r:hover{background:var(--chip); color:var(--ink)}
+.ss-dot{flex:none; width:6px; height:6px; border-radius:50%; background:var(--line)}
+.ss-opt.on,.ss-r.on{color:var(--accent-ink); font-weight:600; background:var(--accent-soft)}
+.ss-opt.on .ss-dot,.ss-r.on .ss-dot{background:var(--accent)}
+.stg-sub.off{opacity:.4}
+.ss-reasons{display:none; margin:2px 0 0 15px}
+.ss-reasons.show{display:block}
+.ss-r{font-size:14px; padding-left:8px}
+.stg-sub.pending .ss-opt{animation:pulse 1.5s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){ .stg-sub.pending .ss-opt{animation:none; outline:1.5px solid var(--accent); outline-offset:1px} }
+/* which scenario is playing — top bar */
+.scen{margin-left:12px; font-size:13.5px; font-weight:600; border-radius:20px; padding:3px 12px; background:var(--chip); color:var(--muted); white-space:nowrap}
+.scen.none{background:var(--warn-soft); color:var(--warn)}
+.scen:empty{display:none}
+/* ---------- notes panel ---------- */
+.notes{border-left:1px solid var(--line); background:var(--panel); overflow-y:auto; padding:0 20px 20px}
+.n-hdr{position:sticky; top:0; z-index:2; background:var(--panel); padding:16px 0 12px; margin-bottom:16px; border-bottom:1px solid var(--line)}
+.n-hdr b{display:block; font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent-ink)}
+.n-hdr small{display:block; margin-top:3px; font-size:14px; color:var(--muted); line-height:1.4}
+.notes h3{margin:0 0 2px; font-size:24px; line-height:1.25}
+.notes .n-num{font-family:"IBM Plex Mono",monospace; font-size:15px; color:var(--muted)}
+.outcome{display:inline-block; margin:9px 0 5px; background:var(--ok-soft); color:var(--ok); border-radius:6px; padding:4px 12px; font-size:15.5px; font-weight:700}
+.notes ul{margin:12px 0 0; padding:0; list-style:none}
+.notes li{padding:10px 0; border-top:1px solid var(--line); font-size:16.5px; line-height:1.55; color:var(--ink)}
+.notes li b{display:block; margin-bottom:3px}
+.notes ul.sub{margin:0; padding-left:20px; list-style:disc}
+.notes ul.sub li{border:0; padding:2px 0; font-size:15.5px; line-height:1.45}
+.notes .n-foot{margin-top:16px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:14.5px; line-height:1.5}
+/* condition blocks — every scenario listed; the active ones highlighted */
+.n-sec{margin:20px 0 2px; font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.cond{position:relative; border:1px solid var(--line); border-radius:10px; padding:10px 13px 4px; margin:10px 0}
+.cond.active{border-color:var(--accent)}
+.c-when{display:flex; align-items:baseline; gap:8px; font-size:15.5px; font-weight:700; color:var(--ink); line-height:1.35}
+.c-when .wk{flex:none; font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:1px 6px; position:relative; top:-1px}
+.cond.active .wk{background:var(--accent); border-color:var(--accent); color:var(--panel)}
+.c-when .wt{flex:1; min-width:0}
+.c-now{flex:none; font-size:11px; font-weight:700; color:var(--accent-ink); background:var(--accent-soft); border-radius:9px; padding:2px 8px; white-space:nowrap; position:relative; top:-1px}
+.c-outline{font-size:13.5px; color:var(--muted); margin-top:3px}
+.cond ul{margin:6px 0 0}
+.cond li{padding:8px 0; font-size:15.5px}
+.cond li:first-child{border-top:0}
+.cond ul.sub li{font-size:14.5px; padding:2px 0}
+/* focused-dm view — window always fills the stage at a constant width */
+.app.dm .sk-top,.app.dm .sk-side{display:none}
+.app.dm .sk{width:100%; max-width:none; margin:0}
+/* toast */
+#toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(12px); background:var(--ink); color:var(--ground);
+  border-radius:9px; padding:9px 15px; font-size:14.5px; max-width:420px; opacity:0; pointer-events:none; transition:.25s; z-index:50; box-shadow:var(--shadow)}
+#toast.show{opacity:1; transform:translateX(-50%)}
+/* responsive */
+@media (max-width:1180px){ .cols,.cols.nclosed{grid-template-columns:210px minmax(0,1fr)} .notes,.notes-resizer{display:none} }
+@media (max-width:860px){
+  .cols,.cols.nclosed{grid-template-columns:minmax(0,1fr)}
+  .rail{display:flex; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line); padding:8px}
+  .rail-label,.rail-hint{display:none}
+  .stg{flex:none; width:auto; margin:0}
+  .stg .t small{display:none}
+  .sk-side{display:none}
+  .stage-center{padding:8px}
+}
+</style>
+
+<div class="app" id="app">
+  <header class="bar">
+    <div class="bar-title">Live Agent V1 Prototype <span class="bar-sub">Camila's journey in Slack · straight to live support</span><span class="scen" id="scen"></span></div>
+    <div class="bar-controls">
+      <div class="seg" role="group" aria-label="Mode">
+        <button id="modePlay" class="on">Play as Camila</button>
+        <button id="modeAuto">▶ Auto-play</button>
+      </div>
+      <div class="seg" role="group" aria-label="View">
+        <button id="viewFull" class="on">Full Slack</button>
+        <button id="viewDM">Focused DM</button>
+      </div>
+      <button class="btn-restart" id="restart">↺ Restart</button>
+    </div>
+  </header>
+
+  <div class="cols">
+    <nav class="rail" id="rail" aria-label="Journey stages">
+      <div class="rail-label">Camila's journey</div>
+      <!-- stages injected -->
+      <div class="rail-hint" id="railHint"><b>V1 covers the whole journey.</b> Pulsing controls are Camila's next action; scenario switches sit under the stage that asks them.</div>
+    </nav>
+
+    <main class="stage-center">
+      <div class="sk" id="sk">
+        <div class="sk-top">
+          <span class="nav">‹ ›</span>
+          <div class="sk-search"><svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg> <span>Search NVIDIA</span></div>
+        </div>
+        <div class="sk-body">
+          <aside class="sk-side">
+            <div class="sk-rail">
+              <div class="ws-logo" title="NVIDIA">
+                <svg viewBox="0 0 48 48" aria-hidden="true">
+                  <path fill="#fff" fill-rule="evenodd" d="M4 22 C10 13 25 8 36 12 C43 14.5 45 20 40 24.5 C33 30.5 21 32.5 12 29 C7 27 4.5 24.5 4 22 Z M15 22 C19 17 27 15 32 17.5 C35.5 19.3 35.5 22.5 32 24.5 C27 27.3 19.5 26.8 15 22 Z"/>
+                  <path fill="#fff" d="M20 21.5 C23 18.5 28 18.7 30 21 C28 24 22.5 24.3 20 21.5 Z"/>
+                  <text x="24" y="43" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="10" fill="#fff" letter-spacing=".4">NVIDIA</text>
+                </svg>
+              </div>
+              <button class="rail-btn on"><span class="ri"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg></span>Home</button>
+              <button class="rail-btn"><span class="ri"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H3l2.6-3A8.5 8.5 0 1 1 21 11.5z"/></svg></span>DMs</button>
+              <button class="rail-btn"><span class="rail-badge">1</span><span class="ri"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/></svg></span>Activity</button>
+              <button class="rail-btn"><span class="ri"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>Files</button>
+              <button class="rail-btn"><span class="ri"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg></span>Later</button>
+              <button class="rail-btn"><span class="ri"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></span>More</button>
+              <div class="rail-foot">
+                <button class="rail-circle" aria-label="New">＋</button>
+                <button class="rail-circle" aria-label="Theme"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></button>
+                <div class="rail-me" title="Camila — active">C<span class="dot2"></span></div>
+              </div>
+            </div>
+            <div class="sk-list">
+              <div class="sk-ws">NVIDIA <span class="chev">⌄</span>
+                <span class="ws-icons">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>
+                  <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                </span>
+              </div>
+              <div class="sk-find"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>Find a conversation…</div>
+              <section>
+                <button class="sk-item"><span class="pfx"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H8l-4 4z"/></svg></span>Threads</button>
+                <button class="sk-item"><span class="pfx"><svg viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="2"/><rect x="17" y="14" width="4" height="6" rx="2"/></svg></span>Huddles</button>
+                <button class="sk-item"><span class="pfx"><svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></span>Drafts &amp; sent<span class="cnt">✎ 1</span></button>
+                <button class="sk-item"><span class="pfx"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/></svg></span>Directories</button>
+                <button class="sk-item"><span class="pfx">🌱</span>3 tasks left</button>
+              </section>
+              <section>
+                <h4><svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.8 6.3.7-4.7 4.3 1.3 6.2L12 16.9 6.4 20l1.3-6.2L3 9.5l6.3-.7z"/></svg>Starred</h4>
+                <div class="starred-hint">Drag and drop important stuff here</div>
+              </section>
+              <section>
+                <h4><svg viewBox="0 0 24 24"><path d="M9 3 7 21M17 3l-2 18M4 8.5h17M3 15.5h17"/></svg>Channels</h4>
+                <button class="sk-item"><span class="pfx"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>design-team</button>
+                <button class="sk-item unread"><span class="pfx">#</span>general</button>
+                <button class="sk-item"><span class="pfx">#</span>gratitude</button>
+                <button class="sk-item"><span class="pfx">#</span>gtc-2026</button>
+                <button class="sk-item unread"><span class="pfx">#</span>help-it</button>
+                <button class="sk-item"><span class="pfx">#</span>industry-news</button>
+                <button class="sk-item"><span class="pfx"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>emea-sales</button>
+              </section>
+              <section>
+                <h4>Direct messages</h4>
+                <button class="sk-item"><span class="presence"></span>Lucía Fernández</button>
+                <button class="sk-item"><span class="presence off"></span>Tom Baker</button>
+              </section>
+              <section>
+                <h4><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>Apps</h4>
+                <button class="sk-item"><span class="bot-sq" style="background:#fff;color:#611f69;font-size:10px">◩</span>Slack</button>
+                <button class="sk-item active" id="dmAssist"><span class="bot-sq m8-avatar"></span>m8 <span class="badge" id="dmBadge">1</span></button>
+              </section>
+              <div class="unread-pill">↓ Unread mentions</div>
+            </div>
+          </aside>
+
+          <section class="sk-chat">
+            <div class="sk-head">
+              <span class="av bot m8-avatar" style="width:26px;height:26px"></span>
+              <b>m8</b><span class="app-tag" style="background:#E8E8E8;color:#616061;font-size:10px;font-weight:700;border-radius:3px;padding:1px 4px">APP</span>
+              <small>NVIDIA support assistant · always available</small>
+            </div>
+            <div class="sk-feed" id="feed" aria-live="polite"></div>
+            <div class="sk-comp">
+              <div class="fmt"><span><b>B</b></span><span><i>I</i></span><span>S</span><span>&lt;/&gt;</span><span><svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span></div>
+              <textarea class="inp" id="inp" placeholder="Message m8" rows="1" readonly></textarea>
+              <div class="tools"><button class="tool-btn" id="plusBtn" aria-label="Attach a file">＋</button><span>Aa</span><span>😊</span><span>@</span>
+                <button class="send" id="send" aria-label="Send">➤</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+      </div>
+    </main>
+
+    <aside class="notes" id="notes" aria-label="Engineering annotations">
+      <div class="n-hdr">
+        <b>Engineering annotations</b>
+        <small>Per stage: what to always build, then every scenario condition. Blocks marked “this run” match the scenario playing now.</small>
+        <button class="n-toggle" id="notesClose" title="Collapse the panel" aria-label="Collapse annotations panel">›</button>
+      </div>
+      <div id="notesBody"></div>
+      <button class="n-collapsed-tab" id="notesOpen" title="Show engineering annotations" aria-label="Expand annotations panel">
+        <span class="chev">‹</span><span class="vlabel">Engineering annotations</span>
+      </button>
+    </aside>
+    <div class="notes-resizer" id="notesResizer" title="Drag to resize · double-click to reset" aria-hidden="true"></div>
+
+    <div class="cover" id="cover">
+      <div class="cover-in">
+        <div class="cover-head">
+          <span class="m8-avatar cover-mascot" aria-hidden="true"></span>
+          <div class="cover-kicker">Live Agent prototype · V1<small>The handoff scope, seen through one employee's day</small></div>
+        </div>
+        <h2>Thirty minutes to fix a VPN</h2>
+        <p>Camila is a regional sales manager on the road in Madrid, 30 minutes from a client presentation, with a VPN that won't connect. <b>V1 owns the whole journey, from her very first message — seven stages, end to end:</b></p>
+        <div class="cover-steps">
+          <span class="cstep"><span class="n">1</span>Describe the need</span>
+          <span class="cstep"><span class="n">2</span>Identify the language</span>
+          <span class="cstep"><span class="n">3</span>Choose the right support</span>
+          <span class="cstep"><span class="n">4</span>Route to a team</span>
+          <span class="cstep"><span class="n">5</span>Connect to the agent</span>
+          <span class="cstep"><span class="n">6</span>Chat with the agent</span>
+          <span class="cstep"><span class="n">7</span>Resolve the issue</span>
+        </div>
+        <p><b>The outcome:</b> a live agent finds the expired access certificate and renews it, the VPN reconnects, and Camila confirms the fix — with minutes to spare before her presentation.</p>
+        <dl class="cover-details">
+          <div><dt>Starts at</dt><dd>18:04 — her first message</dd></div>
+          <div><dt>Where</dt><dd>Madrid, on hotel Wi-Fi · presents at 18:35</dd></div>
+          <div><dt>Scope</dt><dd>All seven stages, in V1</dd></div>
+          <div><dt>First action</dt><dd>Send her opening message</dd></div>
+        </dl>
+        <button class="go" id="start">Start the session</button>
+        <div class="cover-hint">Camila's next action always pulses — click it to move a step forward, or use Auto-play. The journey rail carries the scenario switches: agent availability, session continuity, auto-ticket on leave, file delivery, and who resolves it.</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+/* ================= data ================= */
+const STAGES = [
+  {n:1, name:"Describe the need", theme:"Access & initiation", outcome:"The request is understood on the first message",
+   bullets:[
+    {t:"Use the Slack identity", pts:["The signed-in Slack user is the identity. Do not show a login prompt or create a guest session."]},
+    {t:"Start from free text", pts:["Accept the user's first message as written. No forms, menus, or trigger keywords."]},
+    {t:"Accept any opening shape", pts:["Issue + agent ask, agent ask alone, or issue alone — all three lead into the same journey.","When only an agent is asked for, m8 asks once for a short description before connecting."]}
+   ]},
+  {n:2, name:"Identify the conversation language", theme:"Language & translation", outcome:"The entire session runs in the user's language",
+   bullets:[
+    {t:"Detect language from the message, not the profile", pts:["Use the language of the user's latest message, even when it differs from their profile setting. Camila writes in English on a Spanish profile, so the session uses English.","Apply the detected language to the whole session."]},
+    {t:"Apply it without asking", pts:["Do not ask for confirmation. State the language choice in one line and continue.","Include a one-tap option to switch to the profile language in the same message."]},
+    {t:"Localize all text", pts:["Every string follows the session language: m8 messages, button labels, card statuses, and error text. No mixed-language screens."]}
+   ]},
+  {n:3, name:"Choose the right support", theme:"Access & initiation", outcome:"Support options are real and accurately described",
+   bullets:[
+    {t:"Ask for missing details once — and only if something is missing", pts:["When the first message already carries the description and a screenshot, ask nothing and move on.","Otherwise send one clarifying question, not a series of them.","If the user answers with a screenshot or file, accept it as the answer. Do not ask them to retype what the image already shows."]},
+    {t:"No self-serve step in V1", pts:["Never place a knowledge-base guide in front of support — for any opening. The described issue goes straight to the availability check.","Matching guides travel to the agent inside the context payload instead of being shown to the user."]},
+    {t:"Verify availability before offering", pts:["Offer live chat only after confirming an agent is actually available.","Show the team name, the current wait time, and note that context travels with the request.","When a ticket option is shown, quote its real reply time (SLA) — never a canned estimate."]},
+    {t:"Build the context payload automatically", pts:["Attach the transcript, device details, and files automatically. The user never explains twice."]}
+   ]},
+  {n:4, name:"Route to a team", theme:"Routing & policy", outcome:"The request reaches the right team on the first attempt",
+   bullets:[
+    {t:"Route before rendering the offer", pts:["Resolve the destination queue first, using issue type, user profile, language, desk hours, and team capacity.","Selecting live chat then enqueues immediately — no second routing step."]},
+    {t:"Show the routing decision", pts:["The card names the team and the reason it matched, so the user can see the routing was correct."]},
+    {t:"Enforce one active request per user", pts:["A retry, a second message, or a new device resolves to the existing request. Never create a duplicate ticket."]}
+   ]},
+  {n:5, name:"Connect to the agent", theme:"Session reliability", outcome:"The session survives disconnects and device switches",
+   bullets:[
+    {t:"Render two progress cards, not one", pts:["Card 1 is owned by m8 (intake and routing); card 2 by the agent platform (queue and assignment).","Their state lives in two systems that cannot yet merge into one message, so build them as two cards.","Revisit merging once both platforms share interaction IDs.","Do not explain the split to the user — it should simply read as progress."]},
+    {t:"Update each card in place", pts:["Card 1 steps: routed → identity verified.","Card 2 steps: queued → connecting → connected.","Queue position and estimated wait appear on card 2."]},
+    {t:"Persist the session everywhere", pts:["Closing Slack, retrying, or switching devices always returns the user to this same thread.","Device switches are silent — no message announces them."]},
+    {t:"Show step status", pts:["Spinner while a step is pending; check mark when it completes."]}
+   ]},
+  {n:6, name:"Chat with the agent", theme:"Continuity · Routing", outcome:"The user never repeats themselves",
+   bullets:[
+    {t:"Deliver context before the agent joins", pts:["The agent reads the summary, transcript, and files before writing their first message.","Agent messages post through m8, under the agent's own name."]},
+    {t:"Never re-ask collected information", pts:["The agent asks only for what the payload does not already contain.","New answers the agent gathers are written back to the request record."]},
+    {t:"Transfer without re-intake", pts:["When the agent initiates a transfer, it runs immediately — no confirmation step for the user.","The full payload moves with it; the next agent starts from it, not from zero."]},
+    {t:"Make the hand-off visible", pts:["The transfer renders as its own progress block, resolved the moment the receiving agent connects."]},
+    {t:"Offer an explicit way out", pts:["One secondary “End the chat” button, carried only by the most recent agent message — it moves forward as the agent writes, so the thread never fills with duplicates.","Never render it as the primary action, and never infer ending from the user's messages. Only this control ends the chat — one tap, no confirmation step."]}
+   ]},
+  {n:7, name:"Resolve the issue", theme:"Session reliability", outcome:"The request closes only when the user confirms it is resolved",
+   bullets:[
+    {t:"Only the user closes the request", pts:["The user confirms resolution from the closing message. Never auto-close on a timer.","“Not yet” keeps the chat open and the agent engaged. With auto-ticket on, a follow-up ticket files immediately — show the filing card and the receipt, same as any other filing. With it off, offer “File a follow-up ticket” as a one-tap action instead."]},
+    {t:"Close with a plain-language summary", pts:["State the cause, the fix, and who resolved it, in the session language.","End the recap with the ticket ID."]},
+    {t:"Reply to reopen", pts:["A later reply reopens the same case with its full context. Never a fresh intake."]}
+   ]}
+];
+
+/* m8 mascot — round white head, glossy black face, neon purple pill eyes, small base */
+const M8SVG = `<svg class="m8svg" viewBox="0 0 64 64" aria-hidden="true">
+<path d="M24 50h16a6 6 0 0 1 6 6v3a5 5 0 0 1-5 5H23a5 5 0 0 1-5-5v-3a6 6 0 0 1 6-6z" fill="#FCFBF8" stroke="#DAD4CA" stroke-width="1.2"/>
+<circle cx="32" cy="30" r="26.3" fill="#FCFBF8" stroke="#DAD4CA" stroke-width="1.2"/>
+<circle cx="32" cy="30" r="21.6" fill="#141317"/>
+<ellipse cx="25" cy="19" rx="14" ry="9" fill="#FFFFFF" opacity=".07"/>
+<ellipse cx="22" cy="15.5" rx="7" ry="4.5" fill="#FFFFFF" opacity=".06"/>
+<g fill="none" stroke-linecap="round">
+  <rect x="19.8" y="21.5" width="9.2" height="17" rx="4.6" stroke="#7C3AED" stroke-width="5.6" opacity=".45"/>
+  <rect x="35" y="21.5" width="9.2" height="17" rx="4.6" stroke="#7C3AED" stroke-width="5.6" opacity=".45"/>
+  <rect x="19.8" y="21.5" width="9.2" height="17" rx="4.6" stroke="#BC93FC" stroke-width="2.9"/>
+  <rect x="35" y="21.5" width="9.2" height="17" rx="4.6" stroke="#BC93FC" stroke-width="2.9"/>
+</g></svg>`;
+
+const IC_CHECK = `<svg viewBox="0 0 16 16"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>`;
+const IC_WAIT  = `<svg viewBox="0 0 16 16"><path d="M5 2.5h6v2.3L8.6 8 11 11.2v2.3H5v-2.3L7.4 8 5 4.8z"/></svg>`;
+const IC_SPARK = `<svg viewBox="0 0 16 16"><path d="M8 2.2 9.4 6.6 13.8 8 9.4 9.4 8 13.8 6.6 9.4 2.2 8 6.6 6.6z" fill="currentColor" stroke="none"/></svg>`;
+const AV = {
+  bot:  {cls:"bot",  ch:M8SVG, name:"m8", app:true},
+  cam:  {cls:"cam",  ch:"CR", name:"Camila Reyes"},
+  maria:{cls:"maria",ch:"MG", name:"María G. · Corporate Access Support"},
+  diego:{cls:"diego",ch:"DR", name:"Diego R. · Network Access"},
+  alex: {cls:"alex", ch:"AT", name:"Alex T. · Bilingual Support"}
+};
+
+const TOASTS = {
+  ticket:"In the real experience this files a ticket with the prepared context, with a response in about 4 hours. The prototype follows the chat path.",
+  qxStub:"Leaving is always available while she waits. Pick “Leaves the queue” under stage 5 to play that path.",
+  lang:"This would switch the session to Spanish, her profile language. The prototype keeps English.",
+  edit:"Camila could remove or edit any context row before sharing. The prototype keeps the pre-fill.",
+  fbT:"The ticket option converts the live request — full context, answer by 9:00 tomorrow.",
+  fbC:"The callback option converts the live request — a specialist calls within 15 minutes.",
+  endStub:"Ending the chat is always one tap away during a live chat. Pick “Ends the chat” under stage 6 to play that path.",
+  pulse:"Follow the pulsing control. That is Camila's next action.",
+};
+
+const P = t=>`<p>${t}</p>`;
+const btn = (id,label,primary,toastKey)=>`<button class="sbtn${primary?' primary':''}" id="${id}" ${toastKey?`data-toast="${toastKey}"`:''}>${label}</button>`;
+
+/* stage 1 · the three opening shapes from the flow chart — issue + agent ask,
+   agent ask alone, or issue alone. All three converge on the same journey;
+   the middle one adds m8's one ask-to-describe turn. The v1 flag marks the
+   session's first live action: Camila's opening message itself.
+   In the first shape, everything — description, screenshot, agent ask —
+   arrives in one message, so m8 has nothing left to clarify. */
+const SHOT = {name:'vpn-error-809.png',size:'412 KB',err:'⚠ Error 809: the VPN tunnel could not be established'};
+const OPENINGS = {
+ both:[
+  {s:1,v1:true,k:'gate',g:'upload2',time:'18:05',text:'My VPN won\'t connect and I have a client presentation in 30 minutes — can I talk to a live agent? It fails right after I sign in with the error below, and I\'m traveling in Madrid, at the client\'s site right now.',attach:SHOT}
+ ],
+ agent:[
+  {s:1,v1:true,k:'gate',g:'send',time:'18:04',text:'Can I talk to a live agent, please?'},
+  {s:1,k:'bot',time:'18:04',html:P('I can get you to the right person. First, could you tell me what\'s going on? A line or two is enough — and if an error shows on screen, a screenshot helps. It makes sure you reach the right team, with the context already attached.')},
+  {s:1,k:'gate',g:'upload2',time:'18:05',text:'My VPN won\'t connect — it fails right after I sign in, with the error below. I have a client presentation in 30 minutes, and I\'m traveling in Madrid, at the client\'s site right now.',attach:SHOT}
+ ],
+ issue:[
+  {s:1,v1:true,k:'gate',g:'upload2',time:'18:05',text:'My VPN won\'t connect — it fails right after I sign in, with the error below. I have a client presentation in 30 minutes, and I\'m traveling in Madrid, at the client\'s site right now.',attach:SHOT}
+ ]
+};
+/* the same three openings, for the run where she writes in Catalan */
+const OPENINGS_CA = {
+ both:[
+  {s:1,v1:true,k:'gate',g:'upload2',time:'18:05',text:'El VPN no es connecta i tinc una presentació amb un client d\'aquí a 30 minuts — puc parlar amb un agent? Falla just després d\'iniciar sessió, amb l\'error de sota, i estic de viatge a Madrid, a les oficines del client.',attach:SHOT}
+ ],
+ agent:[
+  {s:1,v1:true,k:'gate',g:'send',time:'18:04',text:'Puc parlar amb un agent, si us plau?'},
+  {s:1,k:'bot',time:'18:04',html:P('És clar. Abans, m\'expliques què passa? Amb una línia o dues n\'hi ha prou — i si surt un error a la pantalla, una captura ajuda. Així arribes a l\'equip correcte, amb el context ja adjuntat.')},
+  {s:1,k:'gate',g:'upload2',time:'18:05',text:'El VPN no es connecta — falla just després d\'iniciar sessió, amb l\'error de sota. Tinc una presentació amb un client d\'aquí a 30 minuts, i estic de viatge a Madrid, a les oficines del client.',attach:SHOT}
+ ],
+ issue:[
+  {s:1,v1:true,k:'gate',g:'upload2',time:'18:05',text:'El VPN no es connecta — falla just després d\'iniciar sessió, amb l\'error de sota. Tinc una presentació amb un client d\'aquí a 30 minuts, i estic de viatge a Madrid, a les oficines del client.',attach:SHOT}
+ ]
+};
+
+/* stage 2 · the detected language is one the live desk covers */
+function langSupported(){ return OPENINGS[openScen].concat([
+ {s:2,k:'bot',time:'18:05',html:P('I\'ll keep this conversation in <b>English</b> — you\'re writing in it, even though your profile is set to Spanish.')+
+   `<div class="btn-row">${btn('langAlt','Switch to Spanish',false,'lang')}</div>`}
+]);}
+
+/* stage 2 edge · m8 reads it, but no live agent covers that language */
+function langUnsupported(){ return OPENINGS_CA[openScen].concat([
+ {s:2,k:'bot',time:'18:05',html:
+   P('T\'entenc en <b>català</b>, però els agents en directe només treballen en <b>anglès</b>. Puc continuar en anglès, o obrir una incidència en català i te la responen traduïda.')+
+   `<div class="btn-row">${btn('lgEN','Continue in English',true)}${btn('lgTicket','Obrir una incidència',false)}</div>`},
+ {k:'gate',g:'choice',ids:['lgEN','lgTicket'],ck:'lang'}
+]);}
+function langSwitched(){ return [
+ {s:2,k:'bot',time:'18:05',html:P('Switched to <b>English</b> — every message from here, including the live agents, comes in English.')}
+];}
+/* stage 2 edge · she keeps her language and takes a translated ticket instead */
+function langTicket(){ return [
+ {s:4,k:'tstatus',time:'18:06',team:'Corporate Access Support',why:'Cobreixen VPN i accés corporatiu',
+  l:{head:'Obrint la incidència', routed:'Assignada a', attach:'Adjuntant el context',
+     attachSub:'Conversa i detalls del dispositiu',
+     note:'Tens una sola sol·licitud oberta. Si respons aquí s\'actualitza — mai s\'obre una segona incidència.'}},
+ {s:7,k:'statup',t:'Incidència INC0048285 creada',final:true,sub:'Conversa adjuntada · resposta en català'},
+ {s:7,k:'bot',time:'18:06',html:
+   P('La incidència <b>INC0048285</b> està oberta amb <b>Corporate Access Support</b>, amb tota la conversa adjuntada. Et respondran aquí, en català, abans de les <b>~22:00</b>.')+
+   P('Si prefereixes parlar amb un agent abans, respon aquí i continuem en anglès — no s\'obrirà cap incidència nova.')+
+   `<div class="recap-ref">Incidència INC0048285 · oberta amb Corporate Access Support</div>`}
+];}
+
+function buildPre(){
+ const head=[
+  {s:1,k:'divider',t:'Thursday, August 20'},
+  {s:1,k:'bot',time:'18:04',html:P('Hi Camila, how can I help?')}
+ ];
+ if(lang==='ok') return head.concat(langSupported(), preRest());
+ return head.concat(langUnsupported(), langTail());
+}
+function langTail(){ return langPick==='ticket' ? langTicket() : langSwitched().concat(preRest()); }
+function preRest(){
+ /* she asked for an agent — the description and screenshot are already in
+    hand (in her opening, or in her one answer to m8's single ask), so there
+    is nothing left to clarify: straight to the availability check */
+ if(openScen!=='issue') return [
+  {s:3,k:'bot',time:'18:06',html:P('Perfect — I can see from your screenshot it\'s <b>error 809</b>. Getting you to a live agent now.')},
+  {k:'branch'}
+ ];
+ /* she described everything — including the screenshot — in one message, so
+    nothing is clarified. V1 has no self-serve step: m8 goes straight to the
+    support offer once availability is known. */
+ return [
+ {s:3,k:'bot',time:'18:06',html:P('I can see from your screenshot it\'s <b>error 809</b>. Let me check who\'s available on the support team.')},
+ {k:'branch'}
+];}
+
+/* ---- Scenario A · a live agent is available ----
+   When she only described the issue, the offer is a real choice: both buttons
+   are live, and the ticket path can still convert. When she asked for an
+   agent, there is no re-choice — the ask was the choice, so m8 connects her
+   directly after the availability check. */
+function buildAvail(){
+ if(openScen!=='issue') return [
+  {s:3,k:'bot',time:'18:07',html:P('<b>Corporate Access Support</b> is online now — about a <b>5 min</b> wait. Connecting you…')+
+    `<div class="ctx-line">Your conversation, screenshot and device details go along with the request, so you won\'t repeat anything.</div>`}
+ ];
+ return [
+ {s:3,k:'bot',time:'18:07',html:P('<b>Corporate Access Support</b> is online now — about a <b>5 min</b> wait. A ticket would get a reply by <b>~22:00</b>.')+
+   `<div class="ctx-line">Your conversation, device and diagnostics go along with the request, so you won\'t repeat anything.</div>
+    <div class="btn-row">${btn('optChat','Chat with IT support',true)}${btn('optTicket','File a ticket',false)}</div>`},
+ {k:'gate',g:'choice',ids:['optChat','optTicket'],ck:'offer'}
+];}
+
+/* A1 · she takes live chat. What happens in the queue is its own condition —
+   the session either continues, moves device, drops and comes back, or times out. */
+function buildChat(){
+  const head=[
+    {s:4,k:'status',time:tt('18:07')},
+    {s:5,k:'qstatus',time:tt('18:07')},
+    {s:5,k:'statup',op:'sub',sub:'Position 1 · about 1 min'}
+  ];
+  if(sess==='drop')    return head.concat(qDrop(),    seg(2), connectEvents());
+  if(sess==='exit')    return head.concat(qExit());          // she leaves the queue
+  if(sess==='timeout') return head.concat(qTimeout());
+  return head.concat(connectEvents());
+}
+const seg = n => { tshift = baseShift + n; return []; };   // shift the rest of the clock
+
+/* the ticket receipt shown after a session ends with auto-ticket on, or when
+   she asks for a ticket at the more-help question */
+function exitReceipt(t1,t2,what){ return [
+ {s:4,k:'tstatus',time:tt(t1),team:'Corporate Access Support',why:'They own VPN and corporate access for travelling employees'},
+ {s:7,k:'statup',t:'Ticket INC0048291 created',final:true,sub:'Reply expected by ~22:00 · linked to this conversation'},
+ {s:7,k:'bot',time:tt(t2),html:
+   P(`Here\'s your receipt: ticket <b>INC0048291</b> is open with <b>Corporate Access Support</b>, with ${what} attached. They\'ll reply here by <b>~22:00</b>.`)+
+   P('If you\'d rather have live chat later, just reply here — it converts this ticket instead of opening a second one. Good luck with the presentation!')+
+   `<div class="recap-ref">Ticket INC0048291 · open with Corporate Access Support · reply by ~22:00</div>`}
+];}
+
+/* queue edge · she leaves while waiting, before an agent ever picks it up.
+   What follows depends on the auto-ticket setting: on → the ticket files
+   itself and a receipt renders; off → the session just closes on both ends
+   and m8 asks whether she needs more help. */
+function qExit(){
+ const head=[
+  {k:'gate',g:'btn',id:'qxLeave'},
+  {s:7,k:'statup',t:'Left the queue',final:true,sub:'Your place was released'}
+ ];
+ if(autoTicket==='on') return head.concat([
+  {s:7,k:'bot',time:tt('18:09'),html:
+    `<div class="m-sys">Session closed on both ends — queue place released</div>`+
+    P('You left the queue, so I\'m filing a ticket automatically — everything from this conversation goes with it.')}
+ ], exitReceipt('18:09','18:10','everything from this conversation'));
+ return head.concat([
+  {s:7,k:'bot',time:tt('18:09'),html:
+    `<div class="m-sys">Session closed on both ends — queue place released</div>`+
+    P('The session has ended on both ends and your place in the queue was released. Nothing was filed — your conversation, screenshot and device details stay right here.')+
+    P('Do you need more help with this?')+
+    `<div class="btn-row">${btn('exHelpTicket','Yes — file a ticket',true)}${btn('exHelpNo','No, I\'m all set',false)}</div>`},
+  {k:'gate',g:'choice',ids:['exHelpTicket','exHelpNo'],ck:'exhelp'}
+ ]);
+}
+
+/* queue edge · the connection drops and comes back inside the window */
+function qDrop(){ return [
+ {s:5,k:'sys',t:`Session disconnected · ${tt('18:09')}`},
+ {s:5,k:'statup',op:'sub',sub:`Disconnected ${tt('18:09')} · your place is held for 5 minutes`},
+ {s:5,k:'sys',t:`Session reconnected · ${tt('18:11')}`},
+ {s:5,k:'statup',op:'sub',sub:'Reconnected · still position 1'},
+ {s:5,k:'bot',time:tt('18:11'),html:P('The session dropped for a couple of minutes and reconnected — your place was held. You\'re still <b>position 1</b>, nothing was lost, and the agent hasn\'t started yet.')}
+];}
+
+/* queue edge · the drop outlasts the window and the session closes for both
+   ends. Auto-ticket on: the ticket files itself, with the same receipt as any
+   other session end. Off: two recovery paths. */
+function qTimeout(){
+ const head=[
+ {s:5,k:'sys',t:`Session disconnected · ${tt('18:09')}`},
+ {s:5,k:'statup',op:'sub',sub:`Disconnected ${tt('18:09')} · your place is held for 5 minutes`},
+ {s:5,k:'statup',t:'Session closed — reconnect window passed',final:true,sub:`Your place was released at ${tt('18:14')}, and the agent was freed for other requests`},
+ {s:5,k:'sys',t:`Session timed out · ${tt('18:14')} — closed on both ends`}
+ ];
+ if(autoTicket==='on') return head.concat([
+ {s:5,k:'bot',time:tt('18:16'),html:
+   P('The session was disconnected past the <b>5-minute</b> reconnect window, so it closed on both ends and your place in the queue was released. The agent never started, so nothing was left half-done.')+
+   P('I\'m filing a ticket automatically — everything from this conversation goes with it.')}
+ ], exitReceipt('18:16','18:17','everything from this conversation'));
+ return head.concat([
+ {s:5,k:'bot',time:tt('18:16'),html:
+   P('The session was disconnected past the <b>5-minute</b> reconnect window, so it closed on both ends and your place in the queue was released. The agent never started, so nothing was left half-done.')+
+   P('Your conversation, the screenshot and your device details are all still here. <b>Corporate Access Support</b> is still online — about a <b>4 min</b> wait.')+
+   `<div class="btn-row">${btn('sesRejoin','Rejoin the queue',true)}${btn('sesTicket','File a ticket instead',false)}</div>`},
+ {k:'gate',g:'choice',ids:['sesRejoin','sesTicket'],ck:'recover'}
+ ]);
+}
+
+/* recovery · back into the queue with everything intact */
+function qRejoin(){ return [
+ {s:5,k:'requeue',time:tt('18:16')},
+ {s:5,k:'qrequeue',time:tt('18:16'),team:'Corporate Access Support',wait:'About 4 min'}
+];}
+
+/* recovery · a ticket instead, with the dropped session on the record */
+function buildRecoverTicket(){ return [
+ {s:4,k:'tstatus',time:'18:17',team:'Corporate Access Support',why:'They own VPN and corporate access for travelling employees'},
+ {s:7,k:'statup',t:'Ticket INC0048291 created',final:true,sub:'Reply expected by ~22:00 · linked to this conversation'},
+ {s:7,k:'bot',time:'18:18',html:
+   P('Ticket <b>INC0048291</b> is with <b>Corporate Access Support</b>, everything from this conversation attached — including the dropped session, so they can see what happened without you retelling it.')+
+   P('They\'ll reply here by <b>~22:00</b>. If the Wi-Fi steadies and you\'d rather have chat before then, reply here — it converts this ticket instead of opening a second one.')+
+   `<div class="recap-ref">Ticket INC0048291 · open with Corporate Access Support · reply by ~22:00</div>`}
+];}
+
+/* in-chat edge · she sends a supporting file, and it either lands or it doesn't */
+const LOGFILE = {name:'vpn-connection-log.txt',size:'48 KB',err:'18:04:12  IKEv2 handshake failed — certificate validation'};
+function fileEvents(){
+ const ask  = {s:6,k:'agent',who:'maria',time:tt('18:13'),html:P('One more thing before I hand you on — can you export the VPN client log and drop it here? <b>Settings &gt; About &gt; Export log</b>.')};
+ const send = {s:6,k:'gate',g:'upload2',time:tt('18:14'),text:'Here it is.',attach:LOGFILE};
+ if(file==='ok') return [ask, send,
+   {s:6,k:'agent',who:'maria',time:tt('18:15'),html:P('Got it, thank you. The log shows the handshake failing on <b>certificate validation</b> at 18:04 — which is exactly what that dismissed reminder was about.')}];
+ return [ask, send,
+   {s:6,k:'bot',time:tt('18:14'),html:
+     P('<b>vpn-connection-log.txt</b> didn\'t reach María. The file uploaded here, but the transfer to the support platform failed — she can\'t open it yet.')+
+     `<div class="ctx-line">Nothing else was affected: your messages, the screenshot and the earlier context all arrived.</div>
+      <div class="btn-row">${btn('fileRetry','Send it again',true)}</div>`},
+   {k:'gate',g:'btn',id:'fileRetry'},
+   {s:6,k:'sys',t:'<b>vpn-connection-log.txt</b> delivered to María G.'},
+   {s:6,k:'agent',who:'maria',time:tt('18:16'),html:P('That one came through — thank you. The log shows the handshake failing on <b>certificate validation</b> at 18:04, which is exactly what that dismissed reminder was about.')}];
+}
+
+/* mid-chat edge · she drops while María is in the conversation and comes back in time */
+function chatDrop(){ return [
+ {s:6,k:'bot',time:tt('18:14'),html:`<div class="m-sys">Session disconnected</div>`},
+ {s:6,k:'bot',time:tt('18:16'),html:`<div class="m-sys">Session reconnected</div>`+
+   P('The session dropped for a couple of minutes and reconnected. The chat stayed open and <b>María is still here</b> — nothing either of you wrote was lost.')},
+ {s:6,k:'agent',who:'maria',time:tt('18:16'),html:P('Still with you — I had your last message. Carrying on.')}
+];}
+
+/* mid-chat edge · the drop outlasts the window and the live chat closes for
+   both ends. Auto-ticket on: the ticket files itself with the work so far.
+   Off: two ways back. */
+function chatTimeout(){
+ const head=[
+ {s:6,k:'bot',time:tt('18:14'),html:`<div class="m-sys">Session disconnected</div>`}
+ ];
+ if(autoTicket==='on') return head.concat([
+ {s:6,k:'bot',time:tt('18:19'),html:
+   `<div class="m-sys">Session timed out — the chat with María closed on both ends</div>`+
+   P('The session was disconnected past the <b>5-minute</b> window, so María moved on to other requests.')+
+   P('I\'m filing a ticket automatically — the full chat with María, including the <b>certificate reminder</b> lead, goes with it.')}
+ ], exitReceipt('18:19','18:20','the full conversation with María, including the <b>certificate reminder</b> lead,'));
+ return head.concat([
+ {s:6,k:'bot',time:tt('18:19'),html:
+   `<div class="m-sys">Session timed out — the chat with María closed on both ends</div>`+
+   P('The session was disconnected past the <b>5-minute</b> window, so María moved on to other requests.')+
+   P('Nothing is lost — everything you both wrote is on the request, and <b>Corporate Access Support</b> is still online, about a <b>2 min</b> wait.')+
+   `<div class="btn-row">${btn('cRe','Reconnect to support',true)}${btn('cTk','File a ticket instead',false)}</div>`},
+ {k:'gate',g:'choice',ids:['cRe','cTk'],ck:'crecover'}
+ ]);
+}
+
+/* mid-chat edge · she ends the chat herself, before it is resolved.
+   The exit starts from the persistent "End the chat" control on the latest
+   agent message — never from her natural language. One tap ends it, with no
+   confirmation step; the auto-ticket setting decides what ending does. */
+function chatExit(){
+ const head=[
+  {k:'gate',g:'endchat'},
+  {s:6,k:'agent',who:'maria',noend:true,time:tt('18:14'),html:P('Understood — I\'ll note where we got to so nothing is lost. Good luck with the presentation!')}
+ ];
+ if(autoTicket==='on') return head.concat([
+  {s:7,k:'bot',time:tt('18:14'),html:
+    `<div class="m-sys">Session closed on both ends — María released to other requests</div>`+
+    P('You ended the chat, so I\'m filing a ticket automatically — the full conversation with María goes with it.')}
+ ], exitReceipt('18:14','18:15','the full conversation with María, including the <b>certificate reminder</b> lead,'));
+ return head.concat([
+  {s:7,k:'bot',time:tt('18:14'),html:
+    `<div class="m-sys">Session closed on both ends — María released to other requests</div>`+
+    P('The session has ended on both ends. Nothing was filed — everything you and María covered stays in this conversation.')+
+    P('Do you need more help with this?')+
+    `<div class="btn-row">${btn('cxHelpTicket','Yes — file a ticket',true)}${btn('cxHelpNo','No, I\'m all set',false)}</div>`},
+  {k:'gate',g:'choice',ids:['cxHelpTicket','cxHelpNo'],ck:'cxhelp'}
+ ]);
+}
+
+/* mid-chat recovery · back to an agent, same request, everything carried */
+function chatReconnect(){ return [
+ {s:6,k:'requeue',time:tt('18:19')},
+ {s:6,k:'qrequeue',time:tt('18:19'),team:'Corporate Access Support',wait:'About 2 min'}
+];}
+function chatBackWithMaria(){ return [
+ {s:6,k:'statup',t:'Connected',final:true,sub:`María G. · Corporate Access Support · ${tt('18:13')}`},
+ {s:6,k:'agent',who:'maria',time:tt('18:13'),html:P('I\'m back with you — the whole chat came with the request, including the certificate reminder you mentioned. No need to go over any of it again.')}
+];}
+
+/* mid-chat recovery · a ticket that carries the half-finished conversation */
+function chatTicket(){ return [
+ {s:4,k:'tstatus',time:'18:20',team:'Corporate Access Support',why:'They own VPN and corporate access for travelling employees'},
+ {s:7,k:'statup',t:'Ticket INC0048291 created',final:true,sub:'Reply expected by ~22:00 · linked to this conversation'},
+ {s:7,k:'bot',time:'18:21',html:
+   P('Ticket <b>INC0048291</b> is with <b>Corporate Access Support</b>, carrying the full chat with María — including the <b>certificate reminder</b> lead, so whoever picks it up starts from there rather than the beginning.')+
+   P('They\'ll reply here by <b>~22:00</b>. If you get a steady connection before then and want chat again, reply here — it converts this ticket instead of opening a second one.')+
+   `<div class="recap-ref">Ticket INC0048291 · open with Corporate Access Support · reply by ~22:00</div>`}
+];}
+
+/* stage 7 · this agent can finish it herself — no hand-off to stage-manage */
+function selfResolve(){ return [
+ {s:6,k:'agent',who:'maria',time:tt('18:13'),html:P(`That fits. That error pattern rules out the client setup, so this points to your <b>corporate access certificate</b> — and I can reset that from here. Give me a minute.`)},
+ {s:7,k:'agent',who:'maria',time:tt('18:15'),html:P('Done. Your certificate is renewed and synced to your MacBook. Can you try reconnecting the VPN?')}
+];}
+
+function agentTail(){
+ const files=fileEvents();
+ tshift += (file==='ok' ? 2 : 4);   // the file exchange costs time; the rest follows
+ if(resolve==='self') return files.concat(selfResolve());
+ return files.concat([
+  {s:6,k:'agent',who:'maria',time:tt('18:13'),html:P(`That fits. That error pattern rules out the client setup, so this points to your <b>corporate access certificate</b>. The network specialist team handles those resets — I\'ll transfer you with your full context.`)},
+  {s:6,k:'bot',time:tt('18:14'),html:P('María is handing you to <b>Network Access Specialists</b> to reset your access certificate — about a <b>3 min</b> wait. Your conversation, screenshot and diagnostics travel with you, so you won\'t explain anything again.')}
+ ]);
+}
+
+function connectEvents(){
+ const head=[
+  {s:5,k:'statup',t:'Connecting…'},
+  {s:5,k:'statup',t:'Connected',final:true,sub:`María G. · Corporate Access Support · ${tt('18:11')}`},
+  {s:6,k:'agent',who:'maria',time:tt('18:11'),html:P(`Hi Camila, I have your summary: <b>error 809</b> on the hotel Wi-Fi, your screenshot and your device details. No need to repeat anything.`)},
+  {s:6,k:'gate',g:'send',time:tt('18:12'),text:'Thank you! Hoping it\'s quick — I present at 18:35.'},
+  {s:6,k:'agent',who:'maria',time:tt('18:12'),html:P('One thing your history doesn\'t tell me: in the last couple of weeks, did your laptop show a prompt about <b>renewing a security certificate</b> — probably while you were on the corporate network?')},
+  {s:6,k:'gate',g:'send',time:tt('18:13'),text:'Now that you mention it, yes — a certificate reminder popped up last week and I dismissed it while traveling.'}
+ ];
+ if(csess==='timeout') return head.concat(chatTimeout());   // ends in a recovery choice
+ if(csess==='exit') return head.concat(chatExit());         // she closes it herself
+ const mid = csess==='drop' ? chatDrop() : [];
+ tshift += (csess==='drop' ? 3 : 0);
+ return head.concat(mid, agentTail());
+}
+function crecoverTail(){
+ if(crecover==='ticket'){ const cur=tshift; tshift=0; const r=chatTicket(); tshift=cur; return r; }
+ const head=chatReconnect();
+ tshift += 8;                                              // back with an agent eight minutes on
+ const r=head.concat(chatBackWithMaria(), agentTail());
+ return r;
+}
+
+/* A2 · she files a ticket instead — agents are available, she just doesn't want to wait */
+function buildTicket(){ return [
+ {s:4,k:'tstatus',time:'18:08',team:'Corporate Access Support',why:'They own VPN and corporate access for travelling employees'},
+ {s:4,k:'statup',t:'Ticket INC0048291 created',final:true,sub:'Reply expected by ~22:00 · linked to this conversation'},
+ {s:7,k:'bot',time:'18:09',html:
+   P('Ticket <b>INC0048291</b> is with <b>Corporate Access Support</b>, everything from this conversation attached. They\'ll reply here by <b>~22:00</b>.')+
+   P('That lands after your 18:35 presentation, so — plainly — the ticket won\'t fix this in time. Agents are online for another <b>20 minutes</b> if you\'d rather still try chat. It would convert this ticket, not open a second one.')+
+   `<div class="btn-row">${btn('tkToChat','Chat with IT support after all',true)}${btn('tkDone','Leave it as a ticket',false)}</div>`},
+ {k:'gate',g:'choice',ids:['tkToChat','tkDone'],ck:'after'}
+];}
+
+/* A2a · she stays with the ticket */
+function buildTicketEnd(){ return [
+ {s:7,k:'bot',time:'18:10',html:
+   P('Understood — <b>INC0048291</b> stays open with Corporate Access Support and the answer comes back in this chat.')+
+   P('If you change your mind while agents are still on, or anything changes after the presentation, just reply here. It updates this ticket rather than starting again.')+
+   `<div class="recap-ref">Ticket INC0048291 · open with Corporate Access Support · reply by ~22:00</div>`}
+];}
+
+/* A2b · the ticket converts to live chat — one request throughout */
+function buildConvert(){ return [
+ {s:4,k:'sys',t:'Ticket <b>INC0048291</b> converted to a live request — no second ticket opened, and its context carried over'}
+];}
+
+/* ---- Scenario B · no live agent available ----
+   One shape, four reasons. m8 names the reason in plain words, then files
+   the ticket with the context already gathered — no re-explaining, no dead end. */
+const REASONS = {
+ closed:{
+   chip:'Desk closed',
+   team:'Corporate Access Support',
+   why:'They own VPN and corporate access for travelling employees',
+   line:P('I can file a ticket now with everything from this conversation — <b>Corporate Access Support</b> runs live chat <b>08:00–18:00</b>, so they\'ll pick it up the moment they open.'),
+   sla:'The desk opens at <b>08:00</b> and your ticket is first in their queue.',
+   ticket:'INC0048307'
+ },
+ topic:{
+   chip:'Topic unsupported',
+   team:'Network Access Specialists',
+   why:'Certificate resets are handled by this team only',
+   line:P('I can file a ticket now with everything from this conversation — this one is handled through tickets rather than live chat.'),
+   sla:'They work certificate resets within <b>2 hours</b>, and reset requests are actioned remotely.',
+   ticket:'INC0048318'
+ }
+};
+
+function buildNone(rk){ const r = REASONS[rk] || REASONS.closed;
+ return [
+ {s:3,k:'bot',time:'18:07',html: r.line +
+   `<div class="ctx-line">Your conversation, the screenshot and your device details are already attached — nothing to repeat.</div>
+    <div class="btn-row">${btn('tkFile','File the ticket',true)}</div>`},
+ {k:'gate',g:'btn',id:'tkFile'},
+ {s:4,k:'tstatus',time:'18:08',team:r.team,why:r.why},
+ {s:7,k:'statup',t:`Ticket ${r.ticket} created`,final:true,sub:'Linked to this conversation · replies arrive in this chat'},
+ {s:7,k:'bot',time:'18:09',html:P(`Ticket <b>${r.ticket}</b> is with <b>${r.team}</b>. ${r.sla}`)+
+   P('The reply comes back here in this chat — you don\'t need to go anywhere to check on it. And if anything changes before then, just reply and it updates the ticket.')+
+   `<div class="recap-ref">Ticket ${r.ticket} · open and linked to this conversation</div>`}
+];}
+
+function buildOk(){ return [
+ {s:6,k:'sys',t:'María G. left the chat · your full context transferred to Network Access Specialists'},
+ {s:6,k:'status2',time:tt('18:14')},
+ {s:6,k:'statup',t:'Connected',final:true,sub:`Diego R. · Network Access · ${tt('18:16')}`},
+ {s:6,k:'agent',who:'diego',time:tt('18:16'),html:P('Hi Camila, I have your full history from María and m8, so nothing to repeat. I\'m resetting your access certificate now. It takes about a minute.')},
+ {s:6,k:'agent',who:'diego',time:tt('18:19'),html:P('Done. Your certificate is renewed and synced to your MacBook. Can you try reconnecting the VPN?')}
+];}
+
+function buildFb(){ return [
+ {s:6,k:'sys',t:'The <b>Network Access Specialists</b> queue closed at 18:15 — end of their shift.'},
+ {s:6,k:'bot',time:'18:15',html:
+   `<div class="card"><div class="c-head warnc">That route can\'t continue</div>
+    <div class="c-sub">The specialist team ended their shift at 18:15. Your request and its context are saved. Choose how you\'d like to continue:</div>
+    <div class="c-actions">${btn('fbQueue','Bilingual queue (EN/ES) · ~6 min',true)}${btn('fbTicket','Ticket with your context · answer by 9:00 tomorrow',false,'fbT')}${btn('fbCall','Phone callback within 15 min',false,'fbC')}</div></div>`},
+ {k:'gate',g:'btn',id:'fbQueue'},
+ {s:6,k:'sys',t:'Your request moved to the bilingual queue with all of its context.'},
+ {s:6,k:'statup',t:'Moving to the bilingual queue (EN/ES)',sub:'About 6 min',icon:'wait'},
+ {s:6,k:'statup',t:'Connected',final:true,sub:'Alex T. · Bilingual Support · 18:21'},
+ {s:6,k:'agent',who:'alex',time:'18:21',html:P('Hi Camila, I have the full history from María and m8. I\'m resetting your access certificate now.')},
+ {s:6,k:'agent',who:'alex',time:'18:23',html:P('Done. Your certificate is renewed. Can you try reconnecting the VPN?')}
+];}
+
+function buildEnd(br){
+ const who = br==='fb' ? 'alex' : br==='self' ? 'maria' : 'diego';
+ const fixer = AV[who].name.split(' ·')[0];
+ const t = (br==='fb'   ? ['18:24','18:24','18:25','18:26']
+          : br==='self' ? ['18:16','18:16','18:17','18:18']
+          :               ['18:20','18:20','18:21','18:23']).map(tt);
+ return [
+ {s:7,k:'gate',g:'send',time:t[0],text:'It works! VPN is connected and I can see the intranet again.'},
+ {s:7,k:'agent',who,time:t[1],html:P('Great to hear. I\'ll close this out — just confirm everything\'s working and you\'re all set. The chat stays open until you do.')+
+   `<div class="btn-row">${btn('resYes','Yes, resolved',true)}${btn('resNo','Not yet',false)}</div>`},
+ {k:'gate',g:'choice',ids:['resYes','resNo'],ck:'resolved',who,t3:t[3]},
+ {s:7,k:'bot',time:t[3],html:P(`Glad it\'s working again, and in time for your 18:35 presentation. Your access certificate had expired; ${fixer} renewed it, and that\'s what was blocking the VPN.`)+
+   P('If it ever fails again, just reply here — this case reopens with its full context. Good luck in there!')+
+   `<div class="recap-ref">Ticket INC0048291 · closed and linked to this conversation</div>`}
+];}
+
+/* "Not yet" · the chat stays open and the agent keeps working. What happens
+   if the user steps away follows the auto-ticket setting. */
+function notYetTail(ev){
+ const base=[
+  {s:7,k:'agent',who:ev.who,time:ev.t3,html:P('No problem — I\'m staying with you. Tell me what\'s still not working and we\'ll keep at it.')}
+ ];
+ if(autoTicket==='on') return base.concat([
+  {s:7,k:'bot',time:ev.t3,html:P('The chat stays open until you confirm it\'s resolved. Since it isn\'t yet, I\'m filing a <b>follow-up ticket automatically</b> — everything from this chat goes with it.')},
+  {s:4,k:'tstatus',time:ev.t3,team:'Corporate Access Support',why:'They own VPN and corporate access for travelling employees'},
+  {s:7,k:'statup',t:'Ticket INC0048291 created',final:true,sub:'Follow-up · linked to this chat'},
+  {s:7,k:'bot',time:ev.t3,html:P('Here\'s your receipt: ticket <b>INC0048291</b> is on file as a follow-up, carrying the full chat so far. The chat stays open — whatever happens next updates the same ticket, never a second one.')+
+    `<div class="recap-ref">Ticket INC0048291 · follow-up · open with Corporate Access Support</div>`}
+ ]);
+ return base.concat([
+  {s:7,k:'bot',time:ev.t3,html:P('The chat stays open until you confirm it\'s resolved. If you have to step away, you can file a follow-up ticket so the team keeps the full context.')+
+    `<div class="btn-row">${btn('fuTicket','File a follow-up ticket',false)}</div>`},
+  {k:'gate',g:'btn',id:'fuTicket'},
+  {s:4,k:'tstatus',time:ev.t3,team:'Corporate Access Support',why:'They own VPN and corporate access for travelling employees'},
+  {s:7,k:'statup',t:'Ticket INC0048291 created',final:true,sub:'Follow-up · linked to this chat'},
+  {s:7,k:'bot',time:ev.t3,html:P('Here\'s your receipt: ticket <b>INC0048291</b> is on file as a follow-up, carrying the full chat so far. The chat stays open — whatever happens next updates the same ticket, never a second one.')+
+    `<div class="recap-ref">Ticket INC0048291 · follow-up · open with Corporate Access Support</div>`}
+ ]);
+}
+
+/* ================= engine ================= */
+const feed = document.getElementById('feed');
+const inp = document.getElementById('inp');
+function setComposer(t){ inp.value = t; inp.style.height='auto'; inp.style.height = t ? inp.scrollHeight+'px' : ''; }
+const sendBtn = document.getElementById('send');
+const app = document.getElementById('app');
+let openScen='agent', lang='ok', langPick='en';
+let branch='avail', reason='closed', path='chat', after='done', sess='same', recover='rejoin';
+let csess='same', crecover='reconnect', file='ok', resolve='transfer';
+let autoTicket='on', exitHelp=null, cexitHelp=null;   // what leaving a session does
+let tshift=0, baseShift=0;
+/* routes that start later run on a shifted clock */
+function tt(s){ if(!tshift) return s;
+  let [h,m]=s.split(':').map(Number); m+=tshift; h+=Math.floor(m/60); m=((m%60)+60)%60; h=((h%24)+24)%24;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+function chatTail(){
+  tshift=baseShift;
+  const head=buildChat();
+  if(sess==='exit') return head;                                   // she left before an agent
+  if(sess==='timeout') return autoTicket==='on' ? head : head.concat(recoverTail());   // auto-on: the timeout already filed the ticket
+  if(csess==='timeout') return autoTicket==='on' ? head : head.concat(crecoverTail(), afterAgent());
+  return head.concat(afterAgent());
+}
+function afterAgent(){
+  if(csess==='exit') return [];                                    // she ended it herself
+  if(csess==='timeout' && (crecover==='ticket' || autoTicket==='on')) return [];   // the chat ended in a ticket
+  return resolve==='self' ? buildEnd('self') : buildOk().concat(buildEnd('ok'));
+}
+function recoverTail(){
+  if(recover==='ticket'){ tshift=0; const r=buildRecoverTicket(); tshift=baseShift; return r; }
+  const head=qRejoin();                 // the card posts the moment she chooses
+  tshift=baseShift+9;                   // everything after runs on the later clock
+  const r=head.concat(connectEvents(), buildOk(), buildEnd('ok'));
+  tshift=baseShift; return r;
+}
+function afterTail(){
+  if(after==='convert'){ baseShift=3; const r=buildConvert().concat(chatTail()); baseShift=0; tshift=0; return r; }
+  return buildTicketEnd();
+}
+function availTail(){ baseShift=0; tshift=0; return path==='ticket' ? buildTicket().concat(afterTail()) : chatTail(); }
+function reachesSupport(){ return !(lang==='unsupported' && langPick==='ticket'); }
+function reachesQueue(){ return reachesSupport() && branch==='avail' && (path==='chat' || after==='convert'); }
+function reachesAgent(){ return reachesQueue() && sess!=='exit' && !(sess==='timeout' && (autoTicket==='on' || recover!=='rejoin')); }
+function reachesFiles(){ return reachesAgent() && csess!=='exit' && !(csess==='timeout' && (autoTicket==='on' || crecover==='ticket')); }
+function reachesTransfer(){ return reachesFiles(); }
+function buildTimeline(){
+  return buildPre().concat(branch==='none' ? buildNone(reason) : buildAvail().concat(availTail()));
+}
+let mode='play', events=buildTimeline(), idx=0, timer=null, waiting=null, started=false, curStage=1;
+
+function el(html){ const d=document.createElement('div'); d.innerHTML=html; return d.firstElementChild; }
+function scroll(){ feed.scrollTop = feed.scrollHeight; }
+function toast(t){ const x=document.getElementById('toast'); x.textContent=t; x.classList.add('show'); clearTimeout(x._t); x._t=setTimeout(()=>x.classList.remove('show'),3400); return false; }
+
+function msgNode(who,time,inner){
+  const a=AV[who];
+  return el(`<div class="msg new"><span class="av ${a.cls}">${a.ch}</span><div class="m-body">
+    <div class="m-head"><b>${a.name}</b>${a.app?'<span class="app-tag">APP</span>':''}<time>${time||''}</time></div>
+    <div class="m-text">${inner}</div></div></div>`);
+}
+function renderMe(ev){
+  let inner = ev.text ? P(esc(ev.text)) : '';
+  if(ev.attach){ inner += `<div class="attach"><div class="thumb"><div class="fake-dialog">${ev.attach.err}</div></div>
+    <div class="a-meta"><b>${ev.attach.name}</b><small>${ev.attach.size}</small></div></div>`; }
+  feed.appendChild(msgNode('cam',ev.time,inner)); scroll();
+}
+function esc(t){ return t.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function render(ev, instant){
+  if(ev.s){ setStage(ev.s); }
+  switch(ev.k){
+    case 'divider': feed.appendChild(el(`<div class="sk-div"><span>${ev.t}</span></div>`)); break;
+    case 'note': feed.appendChild(el(`<div class="note"><span class="lbl">${ev.lbl||'prototype note'}</span>${ev.t}</div>`)); break;
+    case 'sys': feed.appendChild(el(`<div class="sk-sys"><div class="sysline">${ev.t}</div></div>`)); break;
+    case 'bot': feed.appendChild(msgNode('bot',ev.time,ev.html)); wireToasts(); break;
+    /* one persistent, secondary "End the chat" control, carried only by the
+       most recent agent message — it moves forward as the agent writes, so
+       the thread never fills with duplicates. Ending is an explicit action,
+       never read from the user's words. Messages that already carry buttons
+       (or are part of the close itself) skip it. */
+    case 'agent': {
+      const showEnd = !ev.noend && !ev.html.includes('btn-row');
+      feed.querySelectorAll('.endchat-row').forEach(r=>r.remove());
+      feed.appendChild(msgNode('bot',ev.time,
+        `<div class="agent-line">${AV[ev.who].name}</div>`+ev.html+
+        (showEnd?`<div class="btn-row endchat-row"><button class="sbtn" data-endchat>End the chat</button></div>`:'')));
+      break; }
+    case 'me': renderMe(ev); break;
+    case 'cardline': { const c=document.getElementById(ev.target);
+      if(c){ const acts=c.querySelector('.c-actions'); const row=el(`<div class="crow"><span class="ic">✓</span><div>${ev.t}</div></div>`); c.insertBefore(row,acts); } break; }
+    /* Two cards, not one. The assistant owns intake and routing; the agent
+       platform owns the queue and the assignment, and cross-platform state
+       can't be merged into a single message today. Users are never told that —
+       the reason lives in the stage 5 engineering annotation. */
+    case 'status': { feed.appendChild(msgNode('bot',ev.time,
+      `<div class="card tcard" id="statCard">
+        <button class="t-head" onclick="this.closest('.tcard').classList.toggle('closed')">
+          <span class="t-badge">${IC_CHECK}</span>
+          <b>Your request</b><span class="t-chev">⌃</span>
+        </button>
+        <div class="t-body">
+          <div class="t-step done"><span class="t-ic">${IC_CHECK}</span><b class="t-t">Routed to Corporate Access Support</b>
+            <div class="t-subs"><div class="t-sub">They handle VPN and corporate access for traveling employees</div></div></div>
+          <div class="t-step done final"><span class="t-ic">${IC_CHECK}</span><b class="t-t">Identity verified</b>
+            <div class="t-subs"><div class="t-sub">Your conversation and diagnostics sent with the request</div></div></div>
+        </div>
+      </div>`)); break; }
+    case 'qstatus': { feed.appendChild(msgNode('bot',ev.time,
+      `<div class="card tcard">
+        <button class="t-head" onclick="this.closest('.tcard').classList.toggle('closed')">
+          <span class="t-badge working"><span class="ring"></span></span>
+          <b class="shimmer">Connecting you to an agent</b><span class="t-chev">⌃</span>
+        </button>
+        <div class="t-body">
+          <div class="t-step live"><span class="t-ic">${IC_WAIT}</span><b class="t-t">Waiting in queue</b>
+            <div class="t-subs"><div class="t-sub">Position 3 · about 5 min</div></div></div>
+        </div>
+      </div>
+      <div class="status-note">You have one active session. If you close Slack, retry, or switch devices, you\'ll return to this same chat.</div>
+      <div class="ctx-line">Need to step away? Leaving gives up your place in the queue. The request keeps everything you\'ve shared, so a reply here picks up where you left off.</div>
+      <div class="btn-row">${sess==='exit' ? btn('qxLeave','Leave the queue',false) : btn('qxLeave','Leave the queue',false,'qxStub')}</div>`)); break; }
+    case 'tstatus': { const L = ev.l || {};
+      feed.appendChild(msgNode('bot',ev.time,
+      `<div class="card tcard">
+        <button class="t-head" onclick="this.closest('.tcard').classList.toggle('closed')">
+          <span class="t-badge working"><span class="ring"></span></span>
+          <b class="shimmer">${L.head || 'Filing your ticket'}</b><span class="t-chev">⌃</span>
+        </button>
+        <div class="t-body">
+          <div class="t-step done"><span class="t-ic">${IC_CHECK}</span><b class="t-t">${L.routed || 'Routed to'} ${ev.team}</b>
+            <div class="t-subs"><div class="t-sub">${ev.why}</div></div></div>
+          <div class="t-step live"><span class="t-ic">${IC_WAIT}</span><b class="t-t">${L.attach || 'Attaching your context'}</b>
+            <div class="t-subs"><div class="t-sub">${L.attachSub || 'Conversation, screenshot, device details'}</div></div></div>
+        </div>
+      </div>
+      <div class="status-note">${L.note || 'You have one open request. Replying here updates it — it never becomes a second ticket.'}</div>`)); break; }
+    /* same seam as the first status: the assistant reopens the request,
+       the agent platform re-queues it — two cards, never merged. */
+    case 'requeue': { feed.appendChild(msgNode('bot',ev.time,
+      `<div class="card tcard">
+        <button class="t-head" onclick="this.closest('.tcard').classList.toggle('closed')">
+          <span class="t-badge">${IC_CHECK}</span>
+          <b>Your request</b><span class="t-chev">⌃</span>
+        </button>
+        <div class="t-body">
+          <div class="t-step done final"><span class="t-ic">${IC_CHECK}</span><b class="t-t">Same request reopened</b>
+            <div class="t-subs"><div class="t-sub">No second request — your context carried straight over</div></div></div>
+        </div>
+      </div>`)); break; }
+    case 'qrequeue': { feed.appendChild(msgNode('bot',ev.time,
+      `<div class="card tcard">
+        <button class="t-head" onclick="this.closest('.tcard').classList.toggle('closed')">
+          <span class="t-badge working"><span class="ring"></span></span>
+          <b class="shimmer">Connecting you to an agent</b><span class="t-chev">⌃</span>
+        </button>
+        <div class="t-body">
+          <div class="t-step live"><span class="t-ic">${IC_WAIT}</span><b class="t-t">Back in the queue for ${ev.team}</b>
+            <div class="t-subs"><div class="t-sub">${ev.wait}</div></div></div>
+        </div>
+      </div>`)); break; }
+    case 'status2': { feed.appendChild(msgNode('bot',ev.time,
+      `<div class="card tcard">
+        <button class="t-head" onclick="this.closest('.tcard').classList.toggle('closed')">
+          <span class="t-badge working"><span class="ring"></span></span>
+          <b class="shimmer">Transferring you</b><span class="t-chev">⌃</span>
+        </button>
+        <div class="t-body">
+          <div class="t-step live"><span class="t-ic">${IC_WAIT}</span><b class="t-t">Waiting for Network Access Specialists</b>
+            <div class="t-subs"><div class="t-sub">About 3 min · your context is already with them</div></div></div>
+        </div>
+      </div>`)); break; }
+    case 'statup': {
+      /* once an agent is connected, leaving the queue stops being meaningful —
+         remove the leave control and its explainer from the queue card */
+      if(ev.t==='Connected'){
+        const lv=document.getElementById('qxLeave');
+        if(lv){ const row=lv.closest('.btn-row');
+          const ctx=row && row.previousElementSibling;
+          if(ctx && ctx.classList.contains('ctx-line')) ctx.remove();
+          if(row) row.remove(); }
+      }
+      const bodies=feed.querySelectorAll('.t-body'); const body=bodies[bodies.length-1];
+      if(!body) break;
+      if(ev.op==='sub'){
+        const live=body.querySelector('.t-step.live .t-subs');
+        if(live){ live.insertAdjacentHTML('beforeend', `<div class="t-sub">${ev.sub}</div>`); }
+      } else {
+        const live=body.querySelector('.t-step.live');
+        if(live){ live.classList.remove('live'); live.classList.add('done'); live.querySelector('.t-ic').innerHTML=IC_CHECK; }
+        const cls = ev.final ? 'done final' : 'live';
+        const ic = ev.final ? IC_CHECK : (ev.icon==='wait' ? IC_WAIT : IC_SPARK);
+        body.insertAdjacentHTML('beforeend',
+          `<div class="t-step ${cls}"><span class="t-ic">${ic}</span><b class="t-t">${ev.t}</b>${ev.sub?`<div class="t-subs"><div class="t-sub">${ev.sub}</div></div>`:''}</div>`);
+        const badges=feed.querySelectorAll('.t-badge'); const badge=badges[badges.length-1];
+        if(badge){ if(ev.final){ badge.classList.remove('working'); badge.innerHTML=IC_CHECK; }
+                   else { badge.classList.add('working'); badge.innerHTML='<span class="ring"></span>'; } }
+        const heads=feed.querySelectorAll('.t-head b');
+        if(heads.length){ heads[heads.length-1].classList.toggle('shimmer', !ev.final); }
+      }
+      break; }
+    case 'gate': return gate(ev, instant);
+    case 'branch': return branchGate(ev, instant);
+  }
+  scroll();
+}
+
+function wireToasts(){
+  feed.querySelectorAll('button[data-toast]').forEach(b=>{
+    if(b._wired) return; b._wired=true;
+    b.addEventListener('click',()=>toast(TOASTS[b.dataset.toast]||TOASTS.pulse));
+  });
+}
+
+function gate(ev, instant){
+  if(instant){ applyGate(ev, true); return; }
+  waiting = ev;
+  if(ev.g==='send'){
+    setComposer(ev.text); sendBtn.classList.add('ready');
+    if(mode==='play'){ sendBtn.classList.add('pulse'); }
+  } else if(ev.g==='upload2'){
+    ev._att=true;                                   // pre-staged: chip + text appear immediately
+    if(!document.getElementById('compAttach')){
+      const chip=el(`<div class="comp-attach" id="compAttach"><span class="ca-thumb"></span><div><b>${ev.attach.name}</b> <small>${ev.attach.size}</small></div></div>`);
+      document.querySelector('.sk-comp').insertBefore(chip, inp);
+    }
+    setComposer(ev.text);
+    sendBtn.classList.add('ready'); if(mode==='play') sendBtn.classList.add('pulse');
+  } else if(ev.g==='upload'){
+    const p=document.getElementById('plusBtn');
+    if(p && mode==='play'){ p.classList.add('pulse'); }
+  } else if(ev.g==='endchat'){         // the persistent control on the latest agent message goes live
+    const btns=feed.querySelectorAll('[data-endchat]');
+    if(btns.length && mode==='play'){ btns[btns.length-1].classList.add('pulse'); }
+  } else if(ev.g==='choice'){          // both buttons are live — Camila's call, not a scripted one
+    ev.ids.forEach(id=>{ const b=document.getElementById(id);
+      if(b){ b.disabled=false; if(mode==='play') b.classList.add('pulse'); } });
+  } else {
+    const b=document.getElementById(ev.id);
+    if(b){ b.disabled=false; if(mode==='play') b.classList.add('pulse'); }
+  }
+  if(mode==='auto'){ timer=setTimeout(()=>fireGate(),1600); }
+}
+function applyGate(ev, instant){
+  if(ev.g==='send'){ renderMe(ev); setComposer(''); sendBtn.classList.remove('ready','pulse'); }
+  else if(ev.g==='upload'||ev.g==='upload2'){
+    document.getElementById('plusBtn').classList.remove('pulse');
+    const chip=document.getElementById('compAttach'); if(chip) chip.remove();
+    renderMe(ev); setComposer(''); sendBtn.classList.remove('ready','pulse');
+  }
+  else if(ev.g==='endchat'){ feed.querySelectorAll('[data-endchat]').forEach(b=>b.classList.remove('pulse')); }
+  else { const b=document.getElementById(ev.g==='choice' ? (ev._pick||ev.ids[0]) : ev.id);
+    if(ev.g==='choice'){ ev.ids.forEach(id=>{ const x=document.getElementById(id); if(x) x.classList.remove('pulse'); }); }
+    if(b){ b.classList.remove('pulse');            // native: the button returns to resting
+      if(!instant){                                 // in-flight spinner while the app acks
+        const sp=el('<span class="sbtn-spin" aria-hidden="true"></span>');
+        b.insertAdjacentElement('afterend', sp);
+        setTimeout(()=>sp.remove(), 900);
+      } } }
+}
+function fireGate(){
+  if(!waiting) return; const ev=waiting; waiting=null; clearTimeout(timer);
+  applyGate(ev, false);
+  if(ev.g==='choice') resolveChoice(ev, ev._pick || ev.ids[0]);
+  schedule(400);
+}
+/* an in-conversation choice re-cuts the rest of the timeline */
+function resolveChoice(ev, id){
+  if(ev.ck==='offer'){ path = id==='optTicket' ? 'ticket' : 'chat'; after='done';
+    events = events.slice(0,idx).concat(availTail()); }
+  else if(ev.ck==='after'){ after = id==='tkToChat' ? 'convert' : 'done';
+    events = events.slice(0,idx).concat(afterTail()); }
+  else if(ev.ck==='recover'){ recover = id==='sesTicket' ? 'ticket' : 'rejoin';
+    events = events.slice(0,idx).concat(recoverTail()); }
+  else if(ev.ck==='lang'){ langPick = id==='lgTicket' ? 'ticket' : 'en';
+    events = events.slice(0,idx).concat(langTail()); }
+  else if(ev.ck==='resolved'){
+    if(id==='resNo'){ events = events.slice(0,idx).concat(notYetTail(ev)); } }
+  else if(ev.ck==='exhelp'){ exitHelp = id==='exHelpTicket' ? 'ticket' : 'done';
+    events = events.slice(0,idx).concat( exitHelp==='ticket'
+      ? exitReceipt('18:10','18:10','everything from this conversation')
+      : [{s:7,k:'bot',time:tt('18:10'),html:P('Okay — nothing filed. Everything you\'ve shared stays in this conversation, so if the VPN acts up again just reply here and we pick up exactly where we left off. Good luck with the presentation!')}] ); }
+  else if(ev.ck==='cxhelp'){ cexitHelp = id==='cxHelpTicket' ? 'ticket' : 'done';
+    events = events.slice(0,idx).concat( cexitHelp==='ticket'
+      ? exitReceipt('18:17','18:17','the full conversation with María, including the <b>certificate reminder</b> lead,')
+      : [{s:7,k:'bot',time:tt('18:17'),html:P('Okay — nothing filed. The full conversation with María stays here, so replying later picks up from the certificate lead, never from zero. Good luck with the presentation!')}] ); }
+  else if(ev.ck==='crecover'){ crecover = id==='cTk' ? 'ticket' : 'reconnect';
+    tshift=baseShift;                      // rebuild from the route's own clock, not a stale one
+    events = events.slice(0,idx).concat(crecoverTail(), afterAgent()); }
+  paintScenario();
+}
+sendBtn.addEventListener('click',()=>{
+  if(waiting && (waiting.g==='send' || (waiting.g==='upload2' && waiting._att))){ fireGate(); }
+  else toast(TOASTS.pulse);
+});
+document.getElementById('plusBtn').addEventListener('click',()=>{
+  if(waiting && waiting.g==='upload'){ fireGate(); }
+  else if(waiting && waiting.g==='upload2' && !waiting._att){
+    waiting._att=true;
+    document.getElementById('plusBtn').classList.remove('pulse');
+    const chip=el(`<div class="comp-attach" id="compAttach"><span class="ca-thumb"></span><div><b>${waiting.attach.name}</b> <small>${waiting.attach.size}</small></div></div>`);
+    document.querySelector('.sk-comp').insertBefore(chip, inp);
+    setComposer(waiting.text);
+    sendBtn.classList.add('ready'); if(mode==='play') sendBtn.classList.add('pulse');
+  }
+  else toast(TOASTS.pulse);
+});
+feed.addEventListener('click',e=>{
+  const b=e.target.closest('button.sbtn');
+  if(!b || b.dataset.toast) return;
+  if(b.dataset.endchat!==undefined){
+    if(waiting && waiting.g==='endchat'){ fireGate(); } else { toast(TOASTS.endStub); }
+    return;
+  }
+  if(waiting && waiting.g==='btn' && b.id===waiting.id){ fireGate(); }
+  else if(waiting && waiting.g==='choice' && waiting.ids.includes(b.id)){ waiting._pick=b.id; fireGate(); }
+  else { toast(TOASTS.pulse); }
+});
+
+/* Availability decision — lives in the rail, nested under the stage that asks it,
+   so the branch reads as part of the journey map rather than as a message m8 sent. */
+const scen=document.getElementById('scen');
+
+/* the availability decision defaults to "Yes" and plays on without pausing —
+   picking "No" (or a reason) in the rail replays from this point */
+function branchGate(ev, instant){
+  if(instant){ chooseBranch(branch, true); return; }
+  chooseBranch(branch, false);
+  paintSelector();
+  schedule(400);
+}
+function chooseFromRail(c, rk){
+  const sub=document.getElementById('stgSub');
+  if(waiting && waiting.g==='branch'){          // the decision is live — answer it and play on
+    waiting=null; sub.classList.remove('pending');
+    chooseBranch(c,false,rk); schedule(400);
+  } else if(!started){                          // set the scenario before the session starts
+    branch=c; if(rk) reason=rk; paintSelector();
+  } else {                                      // already past it — replay from the decision
+    gotoBranch(c, rk);
+  }
+}
+function gotoBranch(c, rk){ branch=c; if(rk) reason=rk; replayTo(e=>e.k==='branch'); }
+/* how she opens — the three stage 1 shapes; a pick replays from the top */
+function chooseOpen(v){
+  openScen=v;
+  if(v!=='issue'){ path='chat'; after='done'; }   // no offer gate on the direct route
+  if(!started){ paintScenario(); return; }
+  replayTo(e=>!!e.v1);
+}
+/* the detected language decides whether live support is reachable at all */
+function chooseLang(v){
+  lang=v; langPick='en';
+  if(!started){ paintScenario(); return; }
+  replayTo(e=>!!e.v1);
+}
+/* a session condition is a pre-set, not a prompt — picking one replays from the queue */
+function chooseSession(v){
+  sess=v; recover='rejoin'; file='ok'; exitHelp=null;
+  if(v==='timeout') { csess='same'; crecover='reconnect'; }
+  if(!reachesQueue()){ branch='avail'; path='chat'; after='done'; }   // only the live route has a queue
+  if(!started){ paintScenario(); return; }
+  replayTo(e=>e.k==='status');
+}
+/* what leaving does — replay from whichever exit is active */
+function chooseAutoTicket(v){
+  const hadAgent = reachesAgent();          // gating may change with the setting — decide first
+  autoTicket=v; exitHelp=null; cexitHelp=null;
+  if(!started){ paintScenario(); return; }
+  if(reachesQueue() && (sess==='exit' || sess==='timeout')){ replayTo(e=>e.k==='status'); }
+  else if(hadAgent && (csess==='exit' || csess==='timeout')){ replayTo(e=>e.k==='agent' && e.who==='maria'); }
+  else paintScenario();
+}
+/* the same continuity condition, now with an agent in the chat */
+function chooseChatSession(v){
+  csess=v; crecover='reconnect'; cexitHelp=null;
+  if(v==='timeout' && sess==='timeout') sess='same';   // don't compound two timeouts
+  if(!reachesAgent()){ branch='avail'; path='chat'; after='done';
+    if(sess==='timeout') recover='rejoin'; }
+  if(!started){ paintScenario(); return; }
+  replayTo(e=>e.k==='agent' && e.who==='maria');
+}
+/* whether the agent in the chat can finish it herself */
+function chooseResolve(v){
+  resolve=v;
+  if(!reachesFiles()){ branch='avail'; path='chat'; after='done';
+    if(sess==='timeout') recover='rejoin';
+    if(csess==='timeout') crecover='reconnect'; }
+  if(!started){ paintScenario(); return; }
+  replayTo(e=>e.k==='agent' && e.who==='maria');
+}
+/* the file condition only exists once an agent is in the chat */
+function chooseFile(v){
+  file=v;
+  if(!reachesFiles()){ branch='avail'; path='chat'; after='done';
+    if(sess==='timeout') recover='rejoin';
+    if(csess==='timeout') crecover='reconnect'; }
+  if(!started){ paintScenario(); return; }
+  replayTo(e=>e.k==='agent' && e.who==='maria');
+}
+function replayTo(pred){
+  clearTimeout(timer); waiting=null; previewStage=null; feed.innerHTML=''; setComposer('');
+  sendBtn.classList.remove('ready','pulse');
+  { const _c=document.getElementById('compAttach'); if(_c) _c.remove(); }
+  document.getElementById('stgSub').classList.remove('pending');
+  events=buildTimeline(); idx=0; started=true; curStage=1;
+  cover.style.display='none';
+  document.getElementById('dmBadge').style.display='none';
+  let target = events.findIndex(pred); if(target<0) target=events.length-1;
+  while(idx<=target){ const ev=events[idx++]; render(ev,true); }
+  paintScenario(); scroll(); schedule(250);
+}
+function chooseBranch(c, instant, rk){
+  branch=c; if(rk) reason=rk;
+  paintScenario();
+  events = events.slice(0,idx).concat(
+    c==='none' ? buildNone(reason) : buildAvail().concat(availTail())
+  );
+}
+function paintScenario(){
+  const none = branch==='none';
+  if(!started){ scen.textContent=''; scen.classList.remove('none'); }
+  else {
+    const SESS_LBL={same:'',drop:' · dropped, back in time',timeout:' · session timed out',exit:' · left the queue'};
+    const openPre = {issue:'', both:'Opens: issue + agent ask · ', agent:'Opens: agent ask first · '}[openScen] || '';
+    if(!reachesSupport()){ scen.textContent=openPre+'Language not covered · ticket in Catalan'; scen.classList.add('none'); paintRail(); paintNotes(); paintSelector(); return; }
+    const base = openPre + (none ? `No agent available · ${REASONS[reason].chip}`
+      : path==='chat' ? 'Agent available · live chat'
+      : after==='convert' ? 'Ticket → converted to live chat'
+      : 'Agent available · ticket instead');
+    const CS_LBL={same:'',drop:' · dropped mid-chat',timeout:' · chat timed out',exit:' · ended the chat'};
+    const FILE_LBL={ok:' · file delivered',fail:' · file delivery failed'};
+    const RES_LBL={transfer:'',self:' · resolved without transfer'};
+    const exitActive = (reachesQueue() && sess==='exit') || (reachesAgent() && csess==='exit');
+    scen.textContent = base + (reachesQueue() ? SESS_LBL[sess] : '')
+      + (reachesAgent() ? CS_LBL[csess] : '') + (reachesFiles() ? FILE_LBL[file] : '')
+      + (reachesFiles() ? RES_LBL[resolve] : '')
+      + (exitActive ? (autoTicket==='on' ? ' · auto-ticket on' : ' · auto-ticket off') : '');
+    scen.classList.toggle('none', none || (path==='ticket' && after!=='convert')
+      || (reachesQueue() && sess!=='same') || (reachesAgent() && csess!=='same')
+      || (reachesFiles() && file==='fail'));
+  }
+  paintRail(); paintNotes(); paintSelector();
+}
+function paintSelector(){
+  const sub=document.getElementById('stgSub'); if(!sub) return;
+  sub.classList.toggle('off', started && !reachesSupport());   // never got to the support offer
+  const open = sub.classList.contains('pending');    // decision still open — nothing is chosen yet
+  sub.querySelectorAll('.ss-opt').forEach(b=>b.classList.toggle('on', !open && b.dataset.c===branch));
+  sub.querySelectorAll('.ss-r').forEach(b=>b.classList.toggle('on', !open && branch==='none' && b.dataset.r===reason));
+  // reasons show when they apply, or while the decision is still open
+  sub.querySelector('.ss-reasons').classList.toggle('show', branch==='none' || open);
+  const ses=document.getElementById('sesSub');
+  if(ses){
+    ses.classList.toggle('off', started && !reachesQueue());   // no queue on this route
+    ses.querySelectorAll('.ss-opt').forEach(b=>b.classList.toggle('on', b.dataset.s===sess));
+  }
+  const op=document.getElementById('openSub');
+  if(op) op.querySelectorAll('.ss-opt').forEach(b=>b.classList.toggle('on', b.dataset.o===openScen));
+  const lg=document.getElementById('langSub');
+  if(lg) lg.querySelectorAll('.ss-opt').forEach(b=>b.classList.toggle('on', b.dataset.lg===lang));
+  const atk=document.getElementById('atkSub');
+  if(atk){
+    atk.classList.toggle('off', started && !reachesQueue());   // relevant whenever a live session exists
+    atk.querySelectorAll('.ss-opt').forEach(b=>b.classList.toggle('on', b.dataset.at===autoTicket));
+  }
+  const cs=document.getElementById('csesSub');
+  if(cs){
+    cs.classList.toggle('off', started && !reachesAgent());     // no agent chat on this route
+    cs.querySelectorAll('.ss-opt').forEach(b=>b.classList.toggle('on', b.dataset.cs===csess));
+  }
+  const fl=document.getElementById('fileSub');
+  if(fl){
+    fl.classList.toggle('off', started && !reachesFiles());     // chat ended before any file
+    fl.querySelectorAll('.ss-opt').forEach(b=>b.classList.toggle('on', b.dataset.f===file));
+  }
+  const rs=document.getElementById('resSub');
+  if(rs){
+    rs.classList.toggle('off', started && !reachesFiles());     // nobody got to resolve it live
+    rs.querySelectorAll('.ss-opt').forEach(b=>b.classList.toggle('on', b.dataset.rv===resolve));
+  }
+}
+
+/* pacing */
+function delayFor(ev){
+  const d={divider:400,note:1700,sys:900,bot:1500,agent:2000,me:900,cardline:800,status:1300,statup:1400};
+  return d[ev.k]||900;
+}
+function schedule(ms){
+  clearTimeout(timer);
+  timer=setTimeout(next, ms!=null?ms:0);
+}
+function next(){
+  if(idx>=events.length){ return; }
+  const ev=events[idx++];
+  const r=render(ev,false);
+  if(ev.k==='gate'||ev.k==='branch'){ return; } // waits (or auto-schedules itself)
+  const peek=events[idx];
+  schedule(peek?delayFor(peek):0);
+}
+
+/* stage rail + notes */
+const rail=document.getElementById('rail'), notes=document.getElementById('notesBody'), hint=document.getElementById('railHint');
+STAGES.forEach(s=>{
+  const b=el(`<button class="stg${s.pre?' skip':''}" data-n="${s.n}"><span class="num">${s.n}</span><span class="t"><b>${s.name}</b><small>${s.pre?'Ideal state · not in V1':s.theme}</small></span></button>`);
+  b.addEventListener('click',()=>jump(s.n));
+  rail.insertBefore(b,hint);
+});
+
+/* the opening decision, nested under stage 1 — the three flows from the map */
+const OPENS = [
+  {v:'both',  label:'Describes the issue + asks for an agent'},
+  {v:'agent', label:'Just asks for a live agent'},
+  {v:'issue', label:'Describes the issue only'}
+];
+const openEl = el(`<div class="stg-sub" id="openSub">
+  <div class="ss-q">How does she open?</div>
+  ${OPENS.map(o=>`<button class="ss-opt" data-o="${o.v}"><span class="ss-dot"></span>${o.label}</button>`).join('')}
+</div>`);
+rail.insertBefore(openEl, rail.querySelector('.stg[data-n="2"]'));
+openEl.querySelectorAll('.ss-opt').forEach(b=>b.addEventListener('click',()=>chooseOpen(b.dataset.o)));
+
+/* the language decision, nested under stage 2 */
+const LANGS = [
+  {v:'ok',          label:'Yes — supported'},
+  {v:'unsupported', label:'No — not supported'}
+];
+const langEl = el(`<div class="stg-sub" id="langSub">
+  <div class="ss-q">Language supported?</div>
+  ${LANGS.map(o=>`<button class="ss-opt" data-lg="${o.v}"><span class="ss-dot"></span>${o.label}</button>`).join('')}
+</div>`);
+rail.insertBefore(langEl, rail.querySelector('.stg[data-n="3"]'));
+langEl.querySelectorAll('.ss-opt').forEach(b=>b.addEventListener('click',()=>chooseLang(b.dataset.lg)));
+
+/* the availability decision, nested under stage 3 — the stage that asks it */
+const selEl = el(`<div class="stg-sub" id="stgSub">
+  <div class="ss-q">Live agent available?</div>
+  <button class="ss-opt" data-c="avail"><span class="ss-dot"></span>Yes</button>
+  <button class="ss-opt" data-c="none"><span class="ss-dot"></span>No</button>
+  <div class="ss-reasons">${Object.keys(REASONS).map(k=>
+    `<button class="ss-r" data-r="${k}"><span class="ss-dot"></span>${REASONS[k].chip}</button>`).join('')}</div>
+</div>`);
+rail.insertBefore(selEl, rail.querySelector('.stg[data-n="4"]'));
+selEl.querySelectorAll('.ss-opt').forEach(b=>b.addEventListener('click',()=>chooseFromRail(b.dataset.c)));
+selEl.querySelectorAll('.ss-r').forEach(b=>b.addEventListener('click',()=>chooseFromRail('none', b.dataset.r)));
+
+/* what happens to the session while she waits — nested under stage 5 */
+const SESSIONS = [
+  {v:'same',    label:'Stays connected — any device'},
+  {v:'drop',    label:'Session drops, back in time'},
+  {v:'timeout', label:'Session drops, times out'},
+  {v:'exit',    label:'Leaves the queue'}
+];
+const sesEl = el(`<div class="stg-sub" id="sesSub">
+  <div class="ss-q">Continued while waiting?</div>
+  ${SESSIONS.map(o=>`<button class="ss-opt" data-s="${o.v}"><span class="ss-dot"></span>${o.label}</button>`).join('')}
+</div>`);
+rail.insertBefore(sesEl, rail.querySelector('.stg[data-n="6"]'));
+sesEl.querySelectorAll('.ss-opt').forEach(b=>b.addEventListener('click',()=>chooseSession(b.dataset.s)));
+
+/* what leaving a session does — governs both exits (queue and mid-chat) */
+const ATKS = [
+  {v:'on',  label:'On — ticket filed automatically'},
+  {v:'off', label:'Off — just close the session'}
+];
+const atkEl = el(`<div class="stg-sub" id="atkSub">
+  <div class="ss-q">Auto-ticket when leaving?</div>
+  ${ATKS.map(o=>`<button class="ss-opt" data-at="${o.v}"><span class="ss-dot"></span>${o.label}</button>`).join('')}
+</div>`);
+rail.insertBefore(atkEl, rail.querySelector('.stg[data-n="4"]'));
+atkEl.querySelectorAll('.ss-opt').forEach(b=>b.addEventListener('click',()=>chooseAutoTicket(b.dataset.at)));
+
+/* the same condition, asked again mid-conversation — nested under stage 6 */
+const CSESSIONS = SESSIONS.map(o => o.v==='exit' ? {v:'exit', label:'Ends the chat'} : o);
+const csesEl = el(`<div class="stg-sub" id="csesSub">
+  <div class="ss-q">Continued mid-chat?</div>
+  ${CSESSIONS.map(o=>`<button class="ss-opt" data-cs="${o.v}"><span class="ss-dot"></span>${o.label}</button>`).join('')}
+</div>`);
+rail.insertBefore(csesEl, rail.querySelector('.stg[data-n="7"]'));
+csesEl.querySelectorAll('.ss-opt').forEach(b=>b.addEventListener('click',()=>chooseChatSession(b.dataset.cs)));
+
+/* whether a supporting file makes it to the agent — nested under stage 6 */
+const FILES = [
+  {v:'ok',   label:'Sends, delivered'},
+  {v:'fail', label:'Sends, delivery fails'}
+];
+const fileEl = el(`<div class="stg-sub" id="fileSub">
+  <div class="ss-q">Supporting file sent?</div>
+  ${FILES.map(o=>`<button class="ss-opt" data-f="${o.v}"><span class="ss-dot"></span>${o.label}</button>`).join('')}
+</div>`);
+rail.insertBefore(fileEl, rail.querySelector('.stg[data-n="7"]'));
+fileEl.querySelectorAll('.ss-opt').forEach(b=>b.addEventListener('click',()=>chooseFile(b.dataset.f)));
+
+/* whether the agent in the chat can finish it — nested under stage 7 */
+const RESOLVES = [
+  {v:'self',     label:'Yes — María resolves it'},
+  {v:'transfer', label:'No — transfers to a specialist'}
+];
+const resEl = el(`<div class="stg-sub" id="resSub">
+  <div class="ss-q">Resolved by this agent?</div>
+  ${RESOLVES.map(o=>`<button class="ss-opt" data-rv="${o.v}"><span class="ss-dot"></span>${o.label}</button>`).join('')}
+</div>`);
+rail.appendChild(resEl);
+rail.appendChild(hint);                      // keep the hint last
+resEl.querySelectorAll('.ss-opt').forEach(b=>b.addEventListener('click',()=>chooseResolve(b.dataset.rv)));
+paintSelector();
+let previewStage=null;                    // an out-of-scope stage being read, not played
+function setStage(n){
+  previewStage=null;
+  if(n===curStage && started) { paintRail(); return; }
+  curStage=n; paintRail(); paintNotes();
+}
+function paintRail(){
+  const noQueue = started && !reachesQueue();
+  const noAgent = started && !reachesAgent();
+  const noSupport = started && !reachesSupport();
+  const skipped = n => (noSupport && n>=3 && n<=6) || (n===5 && noQueue) || (n===6 && noAgent);
+  const whyNot = n => noSupport ? 'Not reached — ticket instead'
+    : sess==='exit' ? 'Not reached — left the queue'
+    : branch==='none' ? 'Not reached — no agent'
+    : (n===6 && sess==='timeout' && (autoTicket==='on' || recover!=='rejoin')) ? 'Not reached — session timed out'
+    : 'Not reached — ticket instead';
+  document.querySelectorAll('.stg').forEach(b=>{
+    const n=+b.dataset.n;
+    const s=STAGES[n-1];
+    b.classList.toggle('peek',n===previewStage);
+    b.classList.toggle('cur',n===curStage && !previewStage);
+    b.classList.toggle('done',n<curStage && !skipped(n));
+    b.classList.toggle('skip', !!s.pre || skipped(n));
+    const sub=b.querySelector('.t small');
+    if(sub) sub.textContent = s.pre ? 'Ideal state · not in V1' : skipped(n) ? whyNot(n) : s.theme;
+  });
+}
+/* ---------- engineering annotations: conditions ----------
+   Every scenario condition a stage must handle, keyed by stage.
+   The panel always lists all of them, so nothing hides behind a
+   scenario switch; the ones matching the current run are highlighted. */
+const ticketEnd = () => branch==='none' || (path==='ticket' && after!=='convert')
+  || (sess==='timeout' && (recover==='ticket' || autoTicket==='on'))
+  || (csess==='timeout' && (crecover==='ticket' || autoTicket==='on'))
+  || (csess==='exit' && (autoTicket==='on' || cexitHelp==='ticket'))
+  || (sess==='exit' && (autoTicket==='on' || exitHelp==='ticket'))
+  || !reachesSupport();
+const exitNoTicket = () => ((reachesQueue() && sess==='exit') || (reachesAgent() && csess==='exit'))
+  && autoTicket==='off' && exitHelp!=='ticket' && cexitHelp!=='ticket';
+
+const CONDS = {
+ 1:[
+  {when:"The user describes the issue and asks for an agent in one message", active:()=>openScen==='both',
+   outcome:"Both halves of the message are honored",
+   bullets:[
+    {t:"Treat it as one request", pts:["The description, the screenshot and the agent ask arrive in one message — never answer only one half.","Skip any “describe your issue” prompt; a file attached to the first message is part of the description, so never ask the user to re-send or retype it."]},
+    {t:"Honor the agent ask directly", pts:["Check availability immediately and connect. In V1, no self-serve guide renders in front of an agent ask — and no chat-vs-ticket re-choice either."]}
+   ]},
+  {when:"The user just asks for a live agent", active:()=>openScen==='agent',
+   outcome:"One question turns the ask into a routable request",
+   bullets:[
+    {t:"Ask the user to describe the issue — once, and only once", pts:["One open question, in the user's language, that says why it helps: reaching the right team, with the context attached.","The same ask invites a screenshot, so one answer can carry the whole description — never follow it with a second clarifying question.","Never refuse the agent ask, and never demand a category from a menu."]},
+    {t:"The user's answer is the description", pts:["Whatever the user writes next becomes the issue description. No forms, no follow-up interrogation.","Then go straight to the availability check — in V1 no self-serve guide renders after an agent ask."]}
+   ]},
+  {when:"The user only describes the issue", active:()=>openScen==='issue',
+   outcome:"Support starts from the message as written",
+   bullets:[
+    {t:"No agent ask to manage", pts:["The user's one message carries the description and the screenshot, so nothing is clarified — m8 goes straight to the support offer, where chat and ticket are both real options."]}
+   ]}
+ ],
+ 2:[
+  {when:"Live support covers the detected language", active:()=>lang==='ok',
+   outcome:"Everything renders in the user's language",
+   bullets:[
+    {t:"Set the language and continue", pts:["Set the session language without asking, state it in one line, and keep the one-tap switch available.","Everything downstream — cards, buttons, live agents — inherits the language."]}
+   ]},
+  {when:"The message is understood, but no live agent works in that language", active:()=>lang==='unsupported',
+   outcome:"The user still feels understood",
+   bullets:[
+    {t:"Understanding and coverage are separate", pts:["m8 can understand a language that live support does not cover. Never imply the message wasn't understood."]},
+    {t:"State what is covered", pts:["List the languages live support actually works in — and say it in the user's own language."]},
+    {t:"Offer two real options", pts:["Continue in a covered language, or file a ticket in the user's language.","Ticket replies come back translated — state this up front."]}
+   ]},
+  {when:"The user files the ticket in their own language", active:()=>lang==='unsupported' && langPick==='ticket',
+   outcome:"The entire ticket flow stays in their language",
+   bullets:[
+    {t:"Localize the whole flow", pts:["The routing card, its steps, the status lines, and the confirmation all render in the user's language — not only the chat messages."]},
+    {t:"Translate replies, state the SLA", pts:["The support team works in its own language. Replies return translated, within the quoted time."]},
+    {t:"Keep it one request", pts:["Replying in the thread updates this ticket. Switching to a covered-language chat later converts it. Never create a second ticket."]}
+   ]}
+ ],
+ 3:[
+  {when:"An agent is available — the user only described the issue", active:()=>reachesSupport() && branch==='avail' && openScen==='issue',
+   outcome:"Both options are real, with real numbers",
+   bullets:[
+    {t:"Both buttons are genuine options", pts:["Chat shows the live wait time; the ticket shows its reply time. Neither is a decoy to steer the user."]},
+    {t:"Numbers come from the live system", pts:["Read the wait time and SLA from the live queue at render time. Never use fixed copy."]}
+   ]},
+  {when:"An agent is available — the user asked for one", active:()=>reachesSupport() && branch==='avail' && openScen!=='issue',
+   outcome:"The ask is honored — no guide, no re-choice",
+   bullets:[
+    {t:"Skip self-serve", pts:["No knowledge-base guide renders in front of the connection. Relevant guides can travel to the agent with the context payload instead."]},
+    {t:"Skip the chat-vs-ticket choice", pts:["Asking for an agent was the choice. State the team and the live wait time, then enqueue immediately.","The wait time still comes from the live system at render time — never fixed copy."]}
+   ]},
+  {when:"No live agent is available", active:()=>reachesSupport() && branch==='none',
+   outcome:"The user gets the real reason and a clear next step",
+   bullets:[
+    {t:"State the specific reason", pts:["Desk closed → state the live-chat hours and when they reopen.","Topic not covered by chat → state that this issue type is handled through tickets, and quote its turnaround.","Never show a generic “no agents available”."]},
+    {t:"Check before offering", pts:["Resolve availability before the offer renders. Never show a queue or a wait time that can't be honored."]},
+    {t:"Never leave a dead end", pts:["The ticket action sits in the same message, with all gathered context already attached."]}
+   ]}
+ ],
+ 4:[
+  {when:"The user takes live chat — chose it, or asked for an agent", active:()=>reachesSupport() && branch==='avail' && path==='chat',
+   outcome:"The user goes straight to the right team",
+   bullets:[
+    {t:"Enqueue immediately", pts:["Routing was already resolved before the offer, so taking chat enqueues the user at once — no gap, no second routing step.","On the agent-ask openings there is no choice screen at all: the availability check leads straight into the queue."]}
+   ]},
+  {when:"The user files a ticket while agents are online", active:()=>reachesSupport() && branch==='avail' && path==='ticket',
+   outcome:"The user knows the ticket's limits before choosing it",
+   bullets:[
+    {t:"Flag a missed deadline", pts:["If the SLA lands after a deadline the user stated, say so plainly and re-offer chat while agents are still online."]},
+    {t:"Convert, don't duplicate", pts:["If the user takes chat afterwards, convert this ticket into the live request. One ID throughout."]}
+   ]},
+  {when:"A ticket converts to live chat", active:()=>reachesSupport() && branch==='avail' && after==='convert',
+   outcome:"Same request, different channel",
+   bullets:[
+    {t:"Announce the conversion", pts:["A system line states that the ticket became a live request and its context carried over.","Never open a second ticket."]}
+   ]},
+  {when:"Nobody is available — the request routes as a ticket", active:()=>reachesSupport() && branch==='none',
+   outcome:"The request is still routed to the right team",
+   bullets:[
+    {t:"Show the same routing card", pts:["The card still names the team and the reason it matched.","Quote the SLA that fits the reason: a closed desk quotes its opening time; a ticket-only topic quotes its working window."]}
+   ]},
+  {when:"The ticket is filed in an uncovered language", active:()=>!reachesSupport(),
+   outcome:"Routing renders in the user's language too",
+   bullets:[
+    {t:"Localize the routing card", pts:["The header, steps, and single-request note all render in the user's language.","The one-request rule still applies: replying updates this ticket."]}
+   ]}
+ ],
+ 5:[
+  {when:"The user stays connected — on any device", active:()=>reachesQueue() && sess==='same',
+   outcome:"No extra handling needed",
+   bullets:[
+    {t:"Covered by the always-build rules", pts:["Close Slack, retry, or switch devices: the same thread, cards, and queue position restore silently. No extra handling beyond the persistence rules above."]}
+   ]},
+  {when:"The connection drops, and returns inside the window", active:()=>reachesQueue() && sess==='drop',
+   outcome:"A dropped connection does not cost the user their queue place",
+   bullets:[
+    {t:"Hold the queue place", pts:["A disconnect inside the reconnect window keeps the user's position.","State the window length up front, at the moment of disconnect."]},
+    {t:"Show what happened", pts:["The card shows “disconnected” and what is being held.","On return it shows “reconnected” and restates the queue position."]},
+    {t:"Reassure with specifics", pts:["State exactly what held: the queue position, and whether the agent had started.","Lead with the specific facts (“still position 1”, “the agent hasn't started”) — a bare “all good” on its own is not enough."]}
+   ]},
+  {when:"The drop outlasts the window — timeout", active:()=>reachesQueue() && sess==='timeout',
+   outcome:"The loss is clean and clearly explained",
+   bullets:[
+    {t:"Close both ends with one event", pts:["End the session for user and platform at once and free the agent slot. No ghost sessions."]},
+    {t:"State what was lost and what was kept", pts:["Lost: the queue place. Kept: transcript, files, and device details. List both explicitly."]},
+    {t:"Follow the auto-ticket setting", pts:["Auto-ticket on: the ticket files automatically, with the same receipt as any other session end. Live chat stays one reply away — it converts the ticket.","Auto-ticket off: offer two recovery paths — rejoin the queue (the same request re-queues), or convert to a ticket that includes the dropped session."]}
+   ]},
+  {when:"The user leaves the queue on purpose", active:()=>reachesQueue() && sess==='exit',
+   outcome:"Leaving costs the user nothing",
+   bullets:[
+    {t:"Keep the exit visible — until it stops applying", pts:["A leave control sits with the queue status for the whole wait. The user never has to ask in prose.","Remove the control the moment an agent connects — from then on, the in-chat “End the chat” control is the way out."]},
+    {t:"State the cost before the tap", pts:["Show that leaving forfeits the queue place beside the control, before the user taps — not after."]},
+    {t:"Close with one event", pts:["Leaving ends the session for the platform and the employee together."]},
+    {t:"Follow the auto-ticket setting", pts:["Auto-ticket on: file the ticket immediately with the full context and show the receipt — team, ticket ID and reply time.","Auto-ticket off: close the session on both ends, file nothing, and ask whether more help is needed. Filing stays one tap away in the same message."]}
+   ]}
+ ],
+ 6:[
+  {when:"The chat stays connected", active:()=>reachesAgent() && csess==='same',
+   outcome:"The user never repeats themselves",
+   bullets:[
+    {t:"Covered by the always-build rules", pts:["Context arrives first, nothing is re-asked, and the session persists silently across devices. No extra handling beyond the rules above."]}
+   ]},
+  {when:"The user drops mid-chat, and returns in time", active:()=>reachesAgent() && csess==='drop',
+   outcome:"A short drop does not end the conversation",
+   bullets:[
+    {t:"Keep the chat alive", pts:["A short disconnect never ends an agent session.","Show the agent “disconnected”, never “left” — the agent should not think the user walked away."]},
+    {t:"Nothing to re-send", pts:["Messages written while offline persist. The thread restores at the same position."]},
+    {t:"Confirm on both sides", pts:["m8 confirms the chat held; the agent confirms they are still there."]}
+   ]},
+  {when:"The mid-chat drop outlasts the window — timeout", active:()=>reachesAgent() && csess==='timeout',
+   outcome:"The chat ends cleanly, and the work is kept",
+   bullets:[
+    {t:"Release the agent", pts:["Once the window passes, close both ends and return the agent to the pool."]},
+    {t:"Keep the diagnostic work", pts:["Findings so far stay on the request. The next handler resumes from them."]},
+    {t:"Follow the auto-ticket setting", pts:["Auto-ticket on: the ticket files automatically with the diagnostic work so far — the same receipt as any other session end.","Auto-ticket off: offer two ways back — reconnect to the queue, or convert to a ticket. Either way it is the same request."]}
+   ]},
+  {when:"The user ends the chat, unresolved", active:()=>reachesAgent() && csess==='exit',
+   outcome:"Leaving costs the user nothing",
+   bullets:[
+    {t:"The exit starts from the explicit control", pts:["The user taps the secondary “End the chat” button on the most recent agent message — natural language never triggers the exit.","Only that latest message carries the control: one instance, moving forward with the conversation, so ending stays one tap away without cluttering the thread."]},
+    {t:"One tap ends it — no confirmation", pts:["Tapping the control closes the session for both sides immediately. Do not add a confirmation message.","The closing message states what just happened — including whether a ticket was filed, per the auto-ticket setting."]},
+    {t:"The agent records a hand-off note", pts:["Where the conversation got to is written down before the agent returns to the pool. No ghost sessions."]},
+    {t:"Follow the auto-ticket setting", pts:["Auto-ticket on: file the ticket immediately with the full conversation and show the receipt — team, ticket ID and reply time.","Auto-ticket off: close the session on both ends, file nothing, and ask whether more help is needed. Filing stays one tap away in the same message."]}
+   ]},
+  {when:"The agent asks for a file — and it arrives", active:()=>reachesFiles() && file==='ok',
+   outcome:"The file reaches the agent, confirmed",
+   bullets:[
+    {t:"Request files only when necessary", pts:["Ask for a file only when it changes the diagnosis, and name the exact export path."]},
+    {t:"Uploaded is not delivered", pts:["Uploading to Slack and reaching the agent's platform are separate events. Success means the agent opened the file and confirmed it."]},
+    {t:"Keep the file on the request", pts:["The file travels with the request through any later transfer."]}
+   ]},
+  {when:"The file uploads, but delivery to the agent fails", active:()=>reachesFiles() && file==='fail',
+   outcome:"The failure is specific and recoverable",
+   bullets:[
+    {t:"Name the file and the failure point", pts:["Say which file failed and where it stopped — for example, “uploaded here, but transfer to the support platform failed”. Never show a bare error."]},
+    {t:"State what did arrive", pts:["List what was delivered successfully, so the user knows the rest is safe."]},
+    {t:"Offer a one-tap retry", pts:["Retry reuses the already-uploaded file. No re-selecting, no re-typing."]}
+   ]}
+ ],
+ 7:[
+  {when:"The first agent resolves it — no transfer", active:()=>reachesFiles() && resolve==='self' && !ticketEnd(),
+   outcome:"Closed with the user's confirmation",
+   bullets:[
+    {t:"No hand-off machinery", pts:["No transfer block renders. The fix happens inside the same conversation."]},
+    {t:"The same closing rules apply", pts:["User-confirmed close, plain-language wrap-up, and reply-to-reopen all work identically.","The recap names this agent as the resolver."]}
+   ]},
+  {when:"Resolution needs a transfer to a specialist", active:()=>reachesFiles() && resolve==='transfer' && !ticketEnd(),
+   outcome:"The hand-off costs the user nothing",
+   bullets:[
+    {t:"No approval step", pts:["The transfer runs as soon as the agent initiates it. The user is told where they are going and why — not asked to approve."]},
+    {t:"Transfer everything", pts:["The transcript, files, and diagnostic findings move with the transfer. The receiving agent starts from that payload."]},
+    {t:"Show the transfer's progress", pts:["The transfer renders as its own progress block, resolved when the new agent connects."]},
+    {t:"Keep it one request", pts:["The same ticket closes at the end. The recap names the resolving agent."]}
+   ]},
+  {when:"The user leaves and nothing is filed — auto-ticket off", active:()=>exitNoTicket(),
+   outcome:"A clean close, with nothing lost",
+   bullets:[
+    {t:"Close and ask", pts:["The session closes on both ends with a single event, and m8 asks whether more help is needed — never a silent dead end."]},
+    {t:"The conversation is the record", pts:["No ticket exists, but the transcript, files and details stay in this thread. A later reply starts from them, never from zero."]}
+   ]},
+  {when:"The journey ends in an open ticket", active:()=>ticketEnd(),
+   outcome:"Open, with an accurate status and reply path",
+   bullets:[
+    {t:"Show the true state", pts:["The request reads open, not resolved, and quotes the team's actual reply time."]},
+    {t:"Keep it one request", pts:["A reply updates this request. It never becomes a second ticket."]},
+    {t:"Return replies to this chat", pts:["The answer arrives in this same conversation. The user never has to check a separate portal."]}
+   ]}
+ ]
+};
+
+function paintNotes(){
+  const n = previewStage || curStage;
+  const s = STAGES[n-1];
+  const conds = CONDS[n] || [];
+  const on = conds.map(c=>{ try{ return !!c.active(); }catch(e){ return false; } });
+  const first = on.indexOf(true);
+  const outcome = first>=0 ? (conds[first].outcome || s.outcome) : s.outcome;
+  const li = b=>`<li><b>${b.t}</b><ul class="sub">${b.pts.map(p=>`<li>${p}</li>`).join('')}</ul></li>`;
+  notes.innerHTML=`<h3><span class="n-num">${String(s.n).padStart(2,'0')}/07</span> · ${s.name}</h3>
+    <span class="outcome">Outcome: ${outcome}</span>
+    <div class="n-sec">${s.pre ? 'Specification' : 'Always build'}</div>
+    <ul>${s.bullets.map(li).join('')}</ul>
+    ${conds.length ? `<div class="n-sec">Conditions · all scenarios</div>` + conds.map((c,i)=>`
+      <div class="cond${on[i]?' active':''}">
+        <div class="c-when"><span class="wk">If</span><span class="wt">${c.when}</span>${on[i]?'<span class="c-now">this run</span>':''}</div>
+        ${c.outcome?`<div class="c-outline">Outcome: ${c.outcome}</div>`:''}
+        <ul>${c.bullets.map(li).join('')}</ul>
+      </div>`).join('') : ''}
+    ${s.pre ? '<div class="n-foot">Ideal state — outside V1 scope.</div>' : ''}`;
+}
+paintNotes();
+
+function jump(n){
+  if(STAGES[n-1].pre){                      // out of V1 scope: readable, not playable
+    previewStage=n; paintNotes(); paintRail();
+    return toast('Stage 1 sits outside V1 scope. The panel shows what it specifies — V1 itself starts at stage 2.');
+  }
+  previewStage=null;
+  let list = buildTimeline();
+  let target = list.findIndex(e=>e.s===n);
+  if(target<0){ return toast('This stage isn\'t reached in the current scenario — there\'s no queue and no agent chat when nobody is available.'); }
+  const floor = list.findIndex(V1_START);           // never rewind past the V1 entry point
+  if(floor>=0 && target<floor) target=floor;
+  // reset
+  clearTimeout(timer); waiting=null; feed.innerHTML=''; setComposer(''); sendBtn.classList.remove('ready','pulse');
+  { const _c=document.getElementById('compAttach'); if(_c) _c.remove(); }
+  events=list; idx=0; started=true; curStage=1;
+  cover.style.display='none';
+  document.getElementById('dmBadge').style.display='none';
+  while(idx<target){ const ev=events[idx++]; render(ev,true); }
+  scroll(); schedule(250);
+}
+
+/* controls */
+const cover=document.getElementById('cover');
+document.getElementById('start').addEventListener('click',startRun);
+/* V1 entry point: the session opens at Camila's first message — only the
+   date divider and m8's greeting preload as history. */
+const V1_START = ev => !!ev.v1;
+function preloadHistory(){
+  let target = events.findIndex(V1_START);
+  if(target < 0) target = 0;
+  while(idx < target){ const ev=events[idx++]; render(ev,true); }
+  scroll();
+}
+function startRun(){
+  if(started) return; started=true;
+  events=buildTimeline(); idx=0;        // picks made on the cover (opening, language) apply
+  cover.style.display='none';
+  document.getElementById('dmBadge').style.display='none';
+  preloadHistory();
+  schedule(350);
+}
+document.getElementById('restart').addEventListener('click',restart);
+function restart(){
+  clearTimeout(timer); waiting=null; feed.innerHTML=''; setComposer('');
+  sendBtn.classList.remove('ready','pulse');
+  document.getElementById('stgSub').classList.remove('pending');
+  { const _c=document.getElementById('compAttach'); if(_c) _c.remove(); }
+  branch='avail'; reason='closed'; path='chat'; after='done'; sess='same'; recover='rejoin';
+  openScen='agent'; lang='ok'; langPick='en'; csess='same'; crecover='reconnect'; file='ok'; resolve='transfer';
+  autoTicket='on'; exitHelp=null; cexitHelp=null;
+  tshift=0; baseShift=0; previewStage=null; started=false;
+  events=buildTimeline(); idx=0; curStage=1;
+  paintScenario(); paintNotes();
+  document.getElementById('dmBadge').style.display='';
+  cover.style.display='';
+}
+const mp=document.getElementById('modePlay'), ma=document.getElementById('modeAuto');
+mp.addEventListener('click',()=>setMode('play'));
+ma.addEventListener('click',()=>setMode('auto'));
+function setMode(m){
+  mode=m; mp.classList.toggle('on',m==='play'); ma.classList.toggle('on',m==='auto');
+  if(m==='auto' && waiting && waiting.g!=='branch'){ timer=setTimeout(()=>fireGate(),900); }
+  if(m==='auto' && !started){ document.getElementById('start').click(); }
+  if(m==='play' && waiting){ // re-arm pulse
+    if(waiting.g==='send'){ sendBtn.classList.add('pulse'); }
+    else if(waiting.g==='upload'){ document.getElementById('plusBtn').classList.add('pulse'); }
+    else if(waiting.g==='upload2'){ (waiting._att ? sendBtn : document.getElementById('plusBtn')).classList.add('pulse'); }
+    else if(waiting.g==='btn'){ const b=document.getElementById(waiting.id); if(b) b.classList.add('pulse'); }
+    else if(waiting.g==='endchat'){ const bs=feed.querySelectorAll('[data-endchat]'); if(bs.length) bs[bs.length-1].classList.add('pulse'); }
+    else if(waiting.g==='choice'){ waiting.ids.forEach(id=>{ const b=document.getElementById(id); if(b) b.classList.add('pulse'); }); }
+    clearTimeout(timer);
+  }
+  toast(m==='auto' ? 'Auto-play: the session plays itself.' : 'Play as Camila: click the pulsing control to take her next action.');
+}
+const vf=document.getElementById('viewFull'), vd=document.getElementById('viewDM');
+vf.addEventListener('click',()=>setView('full'));
+vd.addEventListener('click',()=>setView('dm'));
+function setView(v){
+  app.classList.toggle('dm',v==='dm');
+  vf.classList.toggle('on',v==='full'); vd.classList.toggle('on',v==='dm');
+}
+/* inject the m8 mascot into static avatar slots */
+document.querySelectorAll('.m8-avatar').forEach(e=>{ e.innerHTML = M8SVG; });
+/* keyboard: → advances current gate in play mode */
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight' && waiting && waiting.g!=='branch'){ fireGate(); }
+});
+/* ---------- annotation panel: resize + collapse ---------- */
+const colsEl=document.querySelector('.cols'), nrz=document.getElementById('notesResizer');
+function setNotesW(w){
+  const rect=colsEl.getBoundingClientRect();
+  const max=Math.max(320, Math.min(760, rect.width-620));   // keep the rail + a usable stage
+  w=Math.max(300, Math.min(max, w));
+  colsEl.style.setProperty('--notes-w', w+'px');
+}
+nrz.addEventListener('pointerdown',e=>{
+  e.preventDefault(); nrz.setPointerCapture(e.pointerId); nrz.classList.add('dragging');
+  document.body.style.cursor='col-resize'; document.body.style.userSelect='none';
+});
+nrz.addEventListener('pointermove',e=>{
+  if(!nrz.classList.contains('dragging')) return;
+  setNotesW(colsEl.getBoundingClientRect().right - e.clientX);
+});
+const endDrag=()=>{ nrz.classList.remove('dragging'); document.body.style.cursor=''; document.body.style.userSelect=''; };
+nrz.addEventListener('pointerup',endDrag); nrz.addEventListener('pointercancel',endDrag);
+nrz.addEventListener('dblclick',()=>colsEl.style.removeProperty('--notes-w'));   // reset to default width
+document.getElementById('notesClose').addEventListener('click',()=>colsEl.classList.add('nclosed'));
+document.getElementById('notesOpen').addEventListener('click',()=>colsEl.classList.remove('nclosed'));
+</script>
